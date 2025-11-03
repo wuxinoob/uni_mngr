@@ -1,0 +1,134 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Terminal Manager</title>
+    <style>
+        /* ... (之前示例中的CSS样式可以复用，这里稍作修改) ... */
+        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; }
+        #sidebar { width: 250px; background-color: #f4f4f4; padding: 10px; border-right: 1px solid #ddd; overflow-y: auto; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; }
+        #terminal { background-color: #1e1e1e; color: #dcdcdc; padding: 15px; flex-grow: 1; overflow-y: scroll; font-family: 'Courier New', monospace; white-space: pre-wrap; margin: 10px; border-radius: 5px; }
+        #sidebar h2 { margin-top: 0; }
+        .terminal-tab { padding: 10px; margin-bottom: 5px; background-color: #e0e0e0; border-radius: 3px; cursor: pointer; border: 1px solid transparent; }
+        .terminal-tab.active { background-color: #007bff; color: white; border-color: #0056b3; }
+        .command-input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2>Terminals</h2>
+        <input type="text" id="commandInput" class="command-input" placeholder="Enter command to run...">
+        <button id="newTerminalBtn">Start New Terminal</button>
+        <hr>
+        <div id="terminal-list"></div>
+    </div>
+    <div id="main-content">
+        <pre id="terminal">Select a terminal to view its output.</pre>
+    </div>
+
+    <script>
+        const terminalListDiv = document.getElementById('terminal-list');
+        const terminalOutput = document.getElementById('terminal');
+        const newTerminalBtn = document.getElementById('newTerminalBtn');
+        const commandInput = document.getElementById('commandInput');
+
+        let currentEventSource = null;
+        let activeTerminalId = null;
+
+        // 1. 切换终端视图的函数
+        function switchToTerminal(terminalId) {
+            if (activeTerminalId === terminalId) return; // 不重复切换
+
+            activeTerminalId = terminalId;
+
+            // 关闭旧的连接
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+
+            // 清空显示
+            terminalOutput.textContent = `Connecting to terminal ${terminalId}...\n`;
+
+            // 更新UI，高亮当前Tab
+            document.querySelectorAll('.terminal-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.id === terminalId);
+            });
+
+            // 建立新的SSE连接
+            currentEventSource = new EventSource(`/stream/${terminalId}`);
+            
+            currentEventSource.onopen = function() {
+                terminalOutput.textContent += 'Connection established. Waiting for output...\n\n';
+            };
+
+            currentEventSource.onmessage = function(event) {
+                // 如果是刚连接，则清空提示语
+                if (terminalOutput.textContent.startsWith('Connecting to terminal')) {
+                    terminalOutput.textContent = '';
+                }
+                terminalOutput.textContent += event.data;
+                terminalOutput.scrollTop = terminalOutput.scrollHeight; // 自动滚动
+            };
+
+            currentEventSource.onerror = function(err) {
+                terminalOutput.textContent += '\n\nConnection error or process finished. Stream closed.\n';
+                currentEventSource.close();
+            };
+        }
+
+        // 2. 渲染终端列表
+        function renderTerminalList(terminals) {
+            terminalListDiv.innerHTML = ''; // 清空
+            terminals.forEach(term => {
+                const tab = document.createElement('div');
+                tab.className = 'terminal-tab';
+                if (term.id === activeTerminalId) {
+                    tab.classList.add('active');
+                }
+                tab.dataset.id = term.id;
+                // 用 title 属性显示完整命令
+                tab.title = term.command; 
+                // 显示命令的前20个字符
+                tab.textContent = `ID: ${term.id.substring(0, 8)}... (${term.is_running ? 'Running' : 'Done'})`;
+                tab.onclick = () => switchToTerminal(term.id);
+                terminalListDiv.appendChild(tab);
+            });
+        }
+
+        // 3. 获取终端列表并渲染
+        async function refreshTerminalList() {
+            const response = await fetch('/api/terminals');
+            const terminals = await response.json();
+            renderTerminalList(terminals);
+        }
+
+        // 4. 启动新终端
+        newTerminalBtn.addEventListener('click', async () => {
+            const command = commandInput.value.trim();
+            if (!command) {
+                alert('Please enter a command.');
+                return;
+            }
+
+            const response = await fetch('/api/terminals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: command })
+            });
+
+            const newTerminal = await response.json();
+            commandInput.value = ''; // 清空输入框
+            await refreshTerminalList();
+            switchToTerminal(newTerminal.id); // 自动切换到新终端
+        });
+
+        // 初始化
+        refreshTerminalList();
+        // 每5秒刷新一次列表以更新状态
+        setInterval(refreshTerminalList, 5000);
+    </script>
+</body>
+</html>

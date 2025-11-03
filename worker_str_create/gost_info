@@ -1,0 +1,2 @@
+data\gost -L 127.0.0.1:1114 -F relay+mtls://anuser:178893@38.59.228.16:1721
+data\gost.exe -L 127.0.0.1:1113 -F relay+mtls://anuser:178893@83.229.125.168:1911
