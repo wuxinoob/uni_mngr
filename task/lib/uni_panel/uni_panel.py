@@ -3,22 +3,36 @@ import sys
 import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QHBoxLayout, QMenu,
-    QSystemTrayIcon, QStyle, QPushButton, QListWidget, QListWidgetItem, QVBoxLayout, QStackedWidget
+    QSystemTrayIcon, QStyle, QPushButton, QListWidget, QListWidgetItem, QVBoxLayout, QStackedWidget, QLineEdit, QLayout, QFormLayout, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, QTimer, QPoint, QRectF, Signal, QThread, QPropertyAnimation, QEasingCurve, QBuffer, QRect
 from PySide6.QtGui import (
     QPainter, QColor, QAction, QPixmap, QGuiApplication,
-    QIcon, QBrush, QPen, QFont, QImage, QRegion
+    QIcon, QBrush, QPen, QFont, QImage, QRegion, 
 )
 class base_execcute(QWidget):
     """基础的创建运行子进程，线程的类"""
     def __init__(self, name:str, content:str):
         super().__init__()
         self.name = name
-        bottom = QPushButton(content)
-        self.addWidget(bottom)
+        self.interface = self.create_interface(content)
+        self.setLayout(self.interface)
 
-    def interface(self):
+    def create_interface(self,content:str) -> QLayout:
+        discription_key = QLabel("任务描述")
+        discription_val = QLabel(content)
+        form_layout = QFormLayout()
+        form_layout.addRow(discription_key, discription_val)
+        form_layout.setFormAlignment(Qt.AlignCenter)
+        cli_wid = QPlainTextEdit("default output")
+        cli_wid.setReadOnly(True)
+        bottom = QPushButton(content)
+        layout = QVBoxLayout()
+        layout.addLayout(form_layout)
+        layout.addWidget(cli_wid)
+        layout.addWidget(bottom)
+        layout.setAlignment(Qt.AlignCenter)
+        return layout
 class mainWindow(QWidget):
     def __init__(self):
         super().__init__()
