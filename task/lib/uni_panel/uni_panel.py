@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QHBoxLayout, QMenu,
     QSystemTrayIcon, QStyle, QPushButton, QListWidget, QListWidgetItem, QVBoxLayout, QStackedWidget, QLineEdit, QLayout, QFormLayout, QPlainTextEdit
 )
-from PySide6.QtCore import Qt, QTimer, QPoint, QRectF, Signal, QThread, QPropertyAnimation, QEasingCurve, QBuffer, QRect
+from PySide6.QtCore import Qt, QTimer, QPoint, QRectF, Signal, QThread, QPropertyAnimation, QEasingCurve, QBuffer, QRect, QProcess
 from PySide6.QtGui import (
     QPainter, QColor, QAction, QPixmap, QGuiApplication,
     QIcon, QBrush, QPen, QFont, QImage, QRegion, 
@@ -39,6 +39,7 @@ class mainWindow(QWidget):
         self.backend_init()
         self.initUI()
     def backend_init(self):
+        a = 
         self.TaskList = []
         self.TaskList.append(base_execcute("gost", "启动gost"))
         self.TaskList.append(base_execcute("webui", "启动webui"))
