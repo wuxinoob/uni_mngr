@@ -39,7 +39,7 @@ class mainWindow(QWidget):
         self.backend_init()
         self.initUI()
     def backend_init(self):
-        a = 
+        a = cla 
         self.TaskList = []
         self.TaskList.append(base_execcute("gost", "启动gost"))
         self.TaskList.append(base_execcute("webui", "启动webui"))

@@ -10,7 +10,17 @@ from PySide6.QtGui import (
     QPainter, QColor, QAction, QPixmap, QGuiApplication,
     QIcon, QBrush, QPen, QFont, QImage, QRegion, 
 )
-import queue.Queue
+
+
+from queue import Queue
+def read_stream(stream:subprocess.Popen, queue:Queue):
+    for line in iter(stream.readline, b''):
+        queue.put(line)
+    stream.close()
+    queue.put(None)
+    pass
+
+
 class msg_handler():
     def __init__(self):
         self.member :dict[str,QWidget] = {}
