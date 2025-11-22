@@ -27,6 +27,7 @@ def read_output(stream,stdout_queue:Queue,process_name:str, process):
         for line in iter(stream.readline, ''):
             stdout_queue.put(process_name +" " +line.strip())
     finally:
+        print("process end")
         stream.close()
 #        process.wait()
 
