@@ -17,10 +17,10 @@ class task_page(QWidget):
     def __init__(self, ProcessManager:ProcessManager):
         super().__init__()
         self.Vlayout = QVBoxLayout()
-        self.QStackedWidget = QStackedWidget()
+        self.QStackedWidget = QStackedWidget() #堆叠窗口
 
-        self.task_list_widget = QComboBox()
-        self.task_list_widget.currentTextChanged.connect(self.task_list_click)
+        self.task_list_widget = QComboBox() #选择窗口
+        self.task_list_widget.currentIndexChanged.connect(self.task_list_idx_change)
         #self.Vlayout.addWidget(QPushButton("添加任务"))
         self.Vlayout.addWidget(self.task_list_widget)
         self.Vlayout.addWidget(self.QStackedWidget)
@@ -32,9 +32,9 @@ class task_page(QWidget):
         #self.task_list_widget.addItems(self.task_list)
 
         self.add_default_task_page()
-    def task_list_click(self, text:str):
+    def task_list_idx_change(self, idx:int):
         """修改stackedWidget页面"""
-        pass
+        self.QStackedWidget.setCurrentIndex(idx)
     def default_task_page(self, process_dict =None) -> QWidget:
         """默认任务页面,缺少定时任务设置，文件选择框"""
         widget = QWidget()
@@ -44,14 +44,17 @@ class task_page(QWidget):
 
         FormLayout = QFormLayout()
         task_name, task_cmd, cmd_args = QLineEdit(), QLineEdit(), QLineEdit()
+        task_name.setObjectName("task_name")
+        task_cmd.setObjectName("task_cmd")
+        cmd_args.setObjectName("cmd_args")
         FormLayout.addRow("任务名称",task_name)
         FormLayout.addRow("运行程序",task_cmd)
         FormLayout.addRow("运行参数",cmd_args)
         PlainTextEdit = QPlainTextEdit()
         PlainTextEdit.setReadOnly(True)
         PushButton = QPushButton("创建任务")
-        #PushButton.clicked.connect(lambda: self.ProcessManager.add_task(task_name.text(), task_cmd.text(), cmd_args.text(), task_type="task", ui_obj=self))
-        PushButton.clicked.connect(lambda: self.add_text(widget.objectName()))
+        PushButton.clicked.connect(lambda: self.ProcessManager.add_task(task_name.text(), task_cmd.text(), cmd_args.text(), task_type="task", ui_obj=self))
+        #PushButton.clicked.connect(lambda: self.add_text(widget.objectName()))
         Vlayout.addLayout(FormLayout)
         Vlayout.addWidget(PlainTextEdit)
         Vlayout.addWidget(PushButton)
@@ -62,8 +65,17 @@ class task_page(QWidget):
         self.QStackedWidget.setCurrentIndex(self.QStackedWidget.count())
     def add_config_task_page(self,process_dict:dict):
         """任务配置页面"""
-        print(process_dict)
-        pass
+
+        default_task_page = self.default_task_page()
+        default_task_page.setObjectName(process_dict["name"])
+        default_task_page.findChild(QLineEdit, "task_name").setText(process_dict["name"])
+        default_task_page.findChild(QLineEdit, "task_cmd").setText(process_dict["command"])
+        default_task_page.findChild(QLineEdit, "cmd_args").setText(process_dict["args"])
+
+        self.task_list_widget.addItem(process_dict["name"])
+        self.QStackedWidget.addWidget(default_task_page)
+        return default_task_page
+
     def change_config_task_page(self, process_dict:dict):
         """修改当前任务配置页面"""
         print(process_dict)
