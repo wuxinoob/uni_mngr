@@ -35,7 +35,7 @@ class task_page(QWidget):
     def task_list_idx_change(self, idx:int):
         """修改stackedWidget页面"""
         self.QStackedWidget.setCurrentIndex(idx)
-    def default_task_page(self, process_dict =None) -> QWidget:
+    def default_task_page(self, ) -> QWidget:
         """默认任务页面,缺少定时任务设置，文件选择框"""
         widget = QWidget()
         Vlayout = QVBoxLayout()
@@ -51,8 +51,10 @@ class task_page(QWidget):
         FormLayout.addRow("运行程序",task_cmd)
         FormLayout.addRow("运行参数",cmd_args)
         PlainTextEdit = QPlainTextEdit()
+        PlainTextEdit.setObjectName("task_output")
         PlainTextEdit.setReadOnly(True)
         PushButton = QPushButton("创建任务")
+        PushButton.setObjectName("task_create")
         PushButton.clicked.connect(lambda: self.ProcessManager.add_task(task_name.text(), task_cmd.text(), cmd_args.text(), task_type="task", ui_obj=self))
         #PushButton.clicked.connect(lambda: self.add_text(widget.objectName()))
         Vlayout.addLayout(FormLayout)
@@ -63,6 +65,7 @@ class task_page(QWidget):
         self.task_list_widget.addItem("新增任务")
         self.QStackedWidget.addWidget(self.default_task_page())
         self.QStackedWidget.setCurrentIndex(self.QStackedWidget.count())
+        
     def add_config_task_page(self,process_dict:dict):
         """任务配置页面"""
 
@@ -71,6 +74,21 @@ class task_page(QWidget):
         default_task_page.findChild(QLineEdit, "task_name").setText(process_dict["name"])
         default_task_page.findChild(QLineEdit, "task_cmd").setText(process_dict["command"])
         default_task_page.findChild(QLineEdit, "cmd_args").setText(process_dict["args"])
+        Vlayout = default_task_page.findChild(QVBoxLayout)
+        #Vlayout.removeItem(Vlayout.itemAt(Vlayout.count()-1))
+        run_control = QHBoxLayout()
+        runButton = QPushButton("运行")
+        runButton.setObjectName("task_run")
+        runButton.clicked.connect(lambda: self.ProcessManager.start_process(process_dict["name"]))
+        stopButton = QPushButton("停止")
+        stopButton.setObjectName("task_stop")
+        stopButton.clicked.connect(lambda: self.ProcessManager.stop_process(process_dict["name"]))
+        restartButton = QPushButton("重启")
+        restartButton.setObjectName("task_restart")
+        run_control.addWidget(runButton)
+        run_control.addWidget(stopButton)
+        run_control.addWidget(restartButton)
+        Vlayout.addLayout(run_control)
 
         self.task_list_widget.addItem(process_dict["name"])
         self.QStackedWidget.addWidget(default_task_page)
@@ -82,11 +100,11 @@ class task_page(QWidget):
     def del_config_task_page(self, process_dict:dict):
         """删除当前任务配置页面"""
         print(process_dict)
-    def add_text(self, name:str):
+    def add_text(self, name:str, text:str):
         widget = self.findChild(QWidget, name)
         if widget:
             text_line = widget.findChild(QPlainTextEdit)
-            text_line.appendPlainText("asdasdasd")
+            text_line.appendPlainText(text)
 
 class mainWindow(QWidget):
     def __init__(self):

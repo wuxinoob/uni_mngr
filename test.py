@@ -1,170 +1,223 @@
 import sys
-import subprocess
-import threading
-import queue
-from PySide6.QtWidgets import QApplication, QMainWindow, QTextEdit, QVBoxLayout, QWidget, QPushButton
-from PySide6.QtCore import QTimer
+import os
+from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, 
+                               QVBoxLayout, QWidget, QLabel, QHBoxLayout)
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer, Property
+from PySide6.QtGui import QFont, QPainter, QColor, QLinearGradient, QGuiApplication
 
-# 1. 共享队列，用于线程间通信
-message_queue = queue.Queue()
+class ToastNotification(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet("background: transparent;")
+        
+        # 初始化UI
+        self.init_ui()
+        
+        # 获取屏幕尺寸
+        screen = QGuiApplication.primaryScreen().availableGeometry()
+        self.screen_width = screen.width()
+        self.screen_height = screen.height()
+        
+        # 设置初始位置（屏幕右下角外）
+        self.move(self.screen_width, self.screen_height - 150)
+        
+        # 动画
+        self.animation = QPropertyAnimation(self, b"geometry")
+        self.animation.setEasingCurve(QEasingCurve.OutCubic)
+        self.animation.setDuration(500)
+        
+        # 自动关闭计时器
+        self.close_timer = QTimer()
+        self.close_timer.timeout.connect(self.hide_notification)
+        self.close_timer.setSingleShot(True)
 
-def stream_reader(process_id, stream):
-    """线程执行的函数，负责读取一个流并放入队列"""
-    try:
-        for line in iter(stream.readline, ''):
-            message_queue.put((process_id, line.strip()))
-    finally:
-        stream.close()
+    def init_ui(self):
+        """初始化UI"""
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(10)
+        
+        # 标题和关闭按钮
+        header_layout = QHBoxLayout()
+        
+        self.title_label = QLabel("通知")
+        self.title_label.setStyleSheet("""
+            QLabel {
+                color: #2c3e50;
+                font-weight: bold;
+                font-size: 14px;
+            }
+        """)
+        
+        self.close_btn = QPushButton("×")
+        self.close_btn.setFixedSize(20, 20)
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #7f8c8d;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #e74c3c;
+                background: rgba(231, 76, 60, 0.1);
+                border-radius: 10px;
+            }
+        """)
+        self.close_btn.clicked.connect(self.hide_notification)
+        
+        header_layout.addWidget(self.title_label)
+        header_layout.addStretch()
+        header_layout.addWidget(self.close_btn)
+        
+        # 消息内容
+        self.message_label = QLabel()
+        self.message_label.setStyleSheet("""
+            QLabel {
+                color: #34495e;
+                font-size: 13px;
+                background: transparent;
+            }
+        """)
+        self.message_label.setWordWrap(True)
+        self.message_label.setMinimumWidth(300)
+        self.message_label.setMaximumWidth(350)
+        
+        main_layout.addLayout(header_layout)
+        main_layout.addWidget(self.message_label)
+        
+        self.setLayout(main_layout)
 
-class ProcessManager:
+    def paintEvent(self, event):
+        """绘制圆角和阴影效果"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 绘制背景
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        
+        # 渐变背景
+        gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+        gradient.setColorAt(0, QColor(255, 255, 255, 240))
+        gradient.setColorAt(1, QColor(240, 240, 240, 240))
+        
+        painter.setBrush(gradient)
+        painter.setPen(QColor(200, 200, 200, 150))
+        painter.drawRoundedRect(rect, 12, 12)
+        
+        # 绘制边框
+        painter.setPen(QColor(220, 220, 220, 100))
+        painter.drawRoundedRect(rect, 12, 12)
+
+    def show_notification(self, title="通知", message="", duration=3000):
+        """显示通知"""
+        self.title_label.setText(title)
+        self.message_label.setText(message)
+        
+        # 调整大小
+        self.adjustSize()
+        
+        # 计算目标位置（屏幕右下角）
+        target_x = self.screen_width - self.width() - 20
+        target_y = self.screen_height - self.height() - 60
+        
+        # 设置动画
+        start_rect = self.geometry()
+        start_rect.moveTo(self.screen_width, target_y)
+        end_rect = self.geometry()
+        end_rect.moveTo(target_x, target_y)
+        
+        self.animation.setStartValue(start_rect)
+        self.animation.setEndValue(end_rect)
+        
+        # 显示并开始动画
+        self.show()
+        self.animation.start()
+        
+        # 设置自动关闭
+        self.close_timer.start(duration)
+
+    def hide_notification(self):
+        """隐藏通知"""
+        # 设置退出动画
+        start_rect = self.geometry()
+        end_rect = self.geometry()
+        end_rect.moveTo(self.screen_width, start_rect.y())
+        
+        self.animation.setStartValue(start_rect)
+        self.animation.setEndValue(end_rect)
+        self.animation.start()
+        
+        # 动画结束后隐藏
+        QTimer.singleShot(500, self.hide)
+
+class MainWindow(QMainWindow):
     def __init__(self):
-        self.processes = {}  # { 'id': {'process': Popen_object, 'threads': []} }
+        super().__init__()
+        self.init_ui()
+        
+        # 创建通知窗口
+        self.notification = ToastNotification()
 
-    def start_process(self, process_id, command):
-        if process_id in self.processes:
-            print(f"Process {process_id} is already running.")
-            return
+    def init_ui(self):
+        """初始化主窗口UI"""
+        self.setWindowTitle("消息通知示例")
+        self.setGeometry(100, 100, 400, 200)
+        
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        layout = QVBoxLayout()
+        
+        # 测试按钮
+        btn1 = QPushButton("显示普通通知")
+        btn1.clicked.connect(self.show_normal_notification)
+        
+        btn2 = QPushButton("显示警告通知")
+        btn2.clicked.connect(self.show_warning_notification)
+        
+        btn3 = QPushButton("显示成功通知")
+        btn3.clicked.connect(self.show_success_notification)
+        
+        layout.addWidget(btn1)
+        layout.addWidget(btn2)
+        layout.addWidget(btn3)
+        
+        central_widget.setLayout(layout)
 
-        print(f"Starting process {process_id} with command: {' '.join(command)}")
-        # 注意: python -u 表示无缓冲输出，非常重要！
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE,
-            encoding='utf-8',
-            errors='ignore',
-            bufsize=1, # 行缓冲
-            # creationflags=subprocess.CREATE_NEW_PROCESS_GROUP # Windows
+    def show_normal_notification(self):
+        """显示普通通知"""
+        self.notification.show_notification(
+            "系统通知", 
+            "这是一个普通的系统通知消息，将在3秒后自动消失。",
+            3000
         )
 
-        # 为 stdout 和 stderr 创建监听线程
-        stdout_thread = threading.Thread(target=stream_reader, args=(process_id, process.stdout), daemon=True)
-        stderr_thread = threading.Thread(target=stream_reader, args=(f"{process_id}_ERR", process.stderr), daemon=True)
+    def show_warning_notification(self):
+        """显示警告通知"""
+        self.notification.show_notification(
+            "警告", 
+            "这是一个警告消息！请注意系统状态。",
+            5000
+        )
 
-        stdout_thread.start()
-        stderr_thread.start()
+    def show_success_notification(self):
+        """显示成功通知"""
+        self.notification.show_notification(
+            "操作成功", 
+            "您的操作已成功完成！数据已保存到数据库。",
+            4000
+        )
 
-        self.processes[process_id] = {'process': process, 'threads': [stdout_thread, stderr_thread]}
-
-    def stop_process(self, process_id):
-        if process_id in self.processes:
-            print(f"Stopping process {process_id}...")
-            p_info = self.processes.pop(process_id)
-            p_info['process'].terminate()  # 发送 SIGTERM
-            try:
-                p_info['process'].wait(timeout=2) # 等待2秒
-            except subprocess.TimeoutExpired:
-                p_info['process'].kill() # 强制杀死
-            print(f"Process {process_id} stopped.")
-    
-    def send_message_to_process(self, target_id, message):
-        if target_id in self.processes:
-            process = self.processes[target_id]['process']
-            if process.poll() is None: # 进程仍在运行
-                try:
-                    # 必须加换行符，让对方的 readline() 能读到
-                    process.stdin.write(message + '\n')
-                    process.stdin.flush()
-                except Exception as e:
-                    print(f"Error writing to {target_id}: {e}")
-    
-    def stop_all(self):
-        for process_id in list(self.processes.keys()):
-            self.stop_process(process_id)
-
-class ControlPanel(QMainWindow):
-    def __init__(self, manager):
-        super().__init__()
-        self.manager = manager
-        self.setWindowTitle("Process Control Panel (Native Python)")
-
-        self.log_display = QTextEdit()
-        self.log_display.setReadOnly(True)
-        
-        self.start_a_button = QPushButton("Start Process A")
-        self.start_b_button = QPushButton("Start Process B")
-        self.stop_a_button = QPushButton("Stop Process A")
-        self.stop_b_button = QPushButton("Stop Process B")
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.log_display)
-        layout.addWidget(self.start_a_button)
-        layout.addWidget(self.start_b_button)
-        layout.addWidget(self.stop_a_button)
-        layout.addWidget(self.stop_b_button)
-        
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
-
-        # 连接信号
-        self.start_a_button.clicked.connect(lambda: self.manager.start_process('ProcA', ['python', '-u', 'my_script.py']))
-        self.start_b_button.clicked.connect(lambda: self.manager.start_process('ProcB', ['python', '-u', 'process_b.py']))
-        self.stop_a_button.clicked.connect(lambda: self.manager.stop_process('ProcA'))
-        self.stop_b_button.clicked.connect(lambda: self.manager.stop_process('ProcB'))
-
-        # 2. 设置定时器，定期从队列中读取消息
-        self.timer = QTimer(self)
-        self.timer.setInterval(100)  # 每100毫秒
-        self.timer.timeout.connect(self.process_queue)
-        self.timer.start()
-
-    def process_queue(self):
-        """处理消息队列中的所有消息"""
-        while not message_queue.empty():
-            try:
-                source_id, message = message_queue.get_nowait()
-                self.log_display.append(f"[{source_id}]: {message}")
-                
-                # 在这里处理和转发消息
-                self.parse_and_forward(source_id, message)
-            except queue.Empty:
-                break # 队列空了，退出循环
-    
-    def parse_and_forward(self, source_id, message):
-        """解析消息并转发"""
-        # 假设协议是 [CMD:TARGET_ID:PAYLOAD]
-        if message.startswith('[CMD:') and ']' in message:
-            parts = message[5:-1].split(':', 2)
-            if len(parts) == 2:
-                target_id, payload = parts
-                self.log_display.append(f"--- FORWARDING from {source_id} to {target_id}: {payload} ---")
-                self.manager.send_message_to_process(target_id, payload)
-
-    def closeEvent(self, event):
-        """关闭窗口时清理所有子进程"""
-        self.manager.stop_all()
-        event.accept()
-
-if __name__ == '__main__':
-    # 创建子进程脚本文件 (用于测试)
-    with open("my_script.py", "w") as f:
-        f.write("""
-import sys, time
-print("Process A started.")
-sys.stdout.flush()
-for i in range(10):
-    time.sleep(2)
-    print(f"Process A heartbeat {i+1}")
-    if i == 2:
-        # 发送命令给B
-        print("[CMD:ProcB:Hello from A!]")
-    sys.stdout.flush()
-print("Process A finished.")
-""")
-    with open("process_b.py", "w") as f:
-        f.write("""
-import sys, time
-print("Process B started, waiting for input...")
-sys.stdout.flush()
-for line in sys.stdin:
-    print(f"Process B received: {line.strip()}")
-    sys.stdout.flush()
-""")
-    
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    manager = ProcessManager()
-    window = ControlPanel(manager)
+    
+    # 设置应用程序样式
+    app.setStyle("Fusion")
+    
+    window = MainWindow()
     window.show()
+    
     sys.exit(app.exec())
