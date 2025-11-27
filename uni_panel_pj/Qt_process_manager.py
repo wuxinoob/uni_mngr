@@ -17,26 +17,20 @@ class ProcessManager(QObject):
         super().__init__()
         self.task_status = {} # 存储 { "name": {status: "running" | "stopped", task_type: "task", "dedicated_task", command: str, args: list,instance:QProcess_instance} }
         self.sig_log.connect(self.print_log)
-    def add_task(self, name:str, command:str, args:str, task_type:str, ui_obj):
-        assert task_type in ["task", "dedicated_task"] #不同类型的任务处理
-        if name in self.task_status:
-            self.sig_log.emit(f"任务名 {name} 已经存在，请更改任务名或删除原任务")
+    def add_task(self, process_dict:dict, ui_obj):
+        #if ui_obj is task_page:
+        if process_dict["name"] in self.task_status:
+            self.sig_log.emit(f"任务名 {process_dict['name']} 已经存在，请更改任务名或删除原任务")
             return
-        process_dict = {"status": "stopped",
-                        "task_type": task_type,
-                        "command": command,
-                        "args"  : args,   
-                        "name"  : name,  
-                        "instance": None,
-                        "ui_obj": ui_obj
-                        }
-        self.task_status[name] = process_dict
-        ui_obj.add_config_task_page(self.task_status[name])
+        process_dict["ui_obj"] = ui_obj
+        process_dict["status"] = "stopped"
+        self.task_status[process_dict["name"]] = process_dict
+        ui_obj.add_config_task_page(self.task_status[process_dict["name"]])
         #在这一部分要添加前端的任务列表与新页面，写入配置文件持久化
     def change_task_attributes(self, name:str, command:str, args):
         if name in self.task_status:
-            self.task_status[name]["command"] = command
-            self.task_status[name]["args"] = args
+            self.task_status[name]["task_cmd"] = command
+            self.task_status[name]["cmd_args"] = args
             if self.task_status[name]["status"] == "running":
                 self.stop_process(name)
             #更新前端显示
@@ -49,8 +43,8 @@ class ProcessManager(QObject):
             return
 
         process = QProcess()
-        process.setProgram(self.task_status[name]["command"])
-        process.setArguments(self.task_status[name]["args"].split(" "))#str->list[str]
+        process.setProgram(self.task_status[name]["task_cmd"])
+        process.setArguments(self.task_status[name]["cmd_args"].split(" "))#str->list[str]
         process.stateChanged.connect(lambda state:self.task_status_update(name, state))
         process.errorOccurred.connect(lambda error: self.sig_log.emit(f"错误: {error}"))
         process.finished.connect(lambda: self.sig_log.emit(f"完成！"))
@@ -62,7 +56,7 @@ class ProcessManager(QObject):
         
         self.task_status[name]["instance"] = process
         process.start()
-        self.sig_log.emit(f"启动进程: {name},{self.task_status[name]['command']} {self.task_status[name]['args']}")
+        self.sig_log.emit(f"启动进程: {name},{self.task_status[name]['task_cmd']} {self.task_status[name]['cmd_args']}")
 
     def task_status_update(self,name, state, ):
         if state == QProcess.Running:

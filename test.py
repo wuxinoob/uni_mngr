@@ -1,223 +1,134 @@
 import sys
-import os
-from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, 
-                               QVBoxLayout, QWidget, QLabel, QHBoxLayout)
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer, Property
-from PySide6.QtGui import QFont, QPainter, QColor, QLinearGradient, QGuiApplication
+from PySide6.QtWidgets import (QApplication, QDialog, QWidget, QVBoxLayout, 
+                               QFormLayout, QLineEdit, QPushButton, QHBoxLayout, 
+                               QSpinBox, QDialogButtonBox, QFileDialog, QLabel)
+from PySide6.QtCore import Qt
 
-class ToastNotification(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setStyleSheet("background: transparent;")
+class TaskConfigDialog(QDialog):
+    """
+    任务配置模态窗口
+    功能：
+    1. 以字典形式初始化配置
+    2. 提供文件选择框选择运行程序
+    3. 设置定时任务和超时时间
+    4. 返回修改后的配置字典
+    """
+    def __init__(self, config: dict = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("任务配置")
+        self.resize(450, 300)
         
-        # 初始化UI
-        self.init_ui()
+        # 如果没有传入配置，使用空字典
+        self.current_config = config if config else {}
         
-        # 获取屏幕尺寸
-        screen = QGuiApplication.primaryScreen().availableGeometry()
-        self.screen_width = screen.width()
-        self.screen_height = screen.height()
-        
-        # 设置初始位置（屏幕右下角外）
-        self.move(self.screen_width, self.screen_height - 150)
-        
-        # 动画
-        self.animation = QPropertyAnimation(self, b"geometry")
-        self.animation.setEasingCurve(QEasingCurve.OutCubic)
-        self.animation.setDuration(500)
-        
-        # 自动关闭计时器
-        self.close_timer = QTimer()
-        self.close_timer.timeout.connect(self.hide_notification)
-        self.close_timer.setSingleShot(True)
+        self.setup_ui()
+        self.load_config_to_ui()
 
-    def init_ui(self):
-        """初始化UI"""
+    def setup_ui(self):
+        # 主布局
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(10)
-        
-        # 标题和关闭按钮
-        header_layout = QHBoxLayout()
-        
-        self.title_label = QLabel("通知")
-        self.title_label.setStyleSheet("""
-            QLabel {
-                color: #2c3e50;
-                font-weight: bold;
-                font-size: 14px;
-            }
-        """)
-        
-        self.close_btn = QPushButton("×")
-        self.close_btn.setFixedSize(20, 20)
-        self.close_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: none;
-                color: #7f8c8d;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                color: #e74c3c;
-                background: rgba(231, 76, 60, 0.1);
-                border-radius: 10px;
-            }
-        """)
-        self.close_btn.clicked.connect(self.hide_notification)
-        
-        header_layout.addWidget(self.title_label)
-        header_layout.addStretch()
-        header_layout.addWidget(self.close_btn)
-        
-        # 消息内容
-        self.message_label = QLabel()
-        self.message_label.setStyleSheet("""
-            QLabel {
-                color: #34495e;
-                font-size: 13px;
-                background: transparent;
-            }
-        """)
-        self.message_label.setWordWrap(True)
-        self.message_label.setMinimumWidth(300)
-        self.message_label.setMaximumWidth(350)
-        
-        main_layout.addLayout(header_layout)
-        main_layout.addWidget(self.message_label)
-        
         self.setLayout(main_layout)
 
-    def paintEvent(self, event):
-        """绘制圆角和阴影效果"""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        # 表单布局
+        form_layout = QFormLayout()
         
-        # 绘制背景
-        rect = self.rect().adjusted(0, 0, -1, -1)
-        
-        # 渐变背景
-        gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-        gradient.setColorAt(0, QColor(255, 255, 255, 240))
-        gradient.setColorAt(1, QColor(240, 240, 240, 240))
-        
-        painter.setBrush(gradient)
-        painter.setPen(QColor(200, 200, 200, 150))
-        painter.drawRoundedRect(rect, 12, 12)
-        
-        # 绘制边框
-        painter.setPen(QColor(220, 220, 220, 100))
-        painter.drawRoundedRect(rect, 12, 12)
+        # 1. 任务名称
+        self.le_task_name = QLineEdit()
+        self.le_task_name.setPlaceholderText("请输入任务唯一标识名")
+        form_layout.addRow("任务名称:", self.le_task_name)
 
-    def show_notification(self, title="通知", message="", duration=3000):
-        """显示通知"""
-        self.title_label.setText(title)
-        self.message_label.setText(message)
+        # 2. 运行程序 (带文件选择按钮)
+        path_layout = QHBoxLayout()
+        self.le_task_cmd = QLineEdit()
+        self.le_task_cmd.setPlaceholderText("可执行文件路径")
+        self.btn_browse = QPushButton("浏览...")
+        self.btn_browse.clicked.connect(self.open_file_dialog)
         
-        # 调整大小
-        self.adjustSize()
-        
-        # 计算目标位置（屏幕右下角）
-        target_x = self.screen_width - self.width() - 20
-        target_y = self.screen_height - self.height() - 60
-        
-        # 设置动画
-        start_rect = self.geometry()
-        start_rect.moveTo(self.screen_width, target_y)
-        end_rect = self.geometry()
-        end_rect.moveTo(target_x, target_y)
-        
-        self.animation.setStartValue(start_rect)
-        self.animation.setEndValue(end_rect)
-        
-        # 显示并开始动画
-        self.show()
-        self.animation.start()
-        
-        # 设置自动关闭
-        self.close_timer.start(duration)
+        path_layout.addWidget(self.le_task_cmd)
+        path_layout.addWidget(self.btn_browse)
+        form_layout.addRow("运行程序:", path_layout)
 
-    def hide_notification(self):
-        """隐藏通知"""
-        # 设置退出动画
-        start_rect = self.geometry()
-        end_rect = self.geometry()
-        end_rect.moveTo(self.screen_width, start_rect.y())
-        
-        self.animation.setStartValue(start_rect)
-        self.animation.setEndValue(end_rect)
-        self.animation.start()
-        
-        # 动画结束后隐藏
-        QTimer.singleShot(500, self.hide)
+        # 3. 运行参数
+        self.le_cmd_args = QLineEdit()
+        self.le_cmd_args.setPlaceholderText("例如: --port 8080 (空格分隔)")
+        form_layout.addRow("运行参数:", self.le_cmd_args)
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.init_ui()
-        
-        # 创建通知窗口
-        self.notification = ToastNotification()
+        # 4. 定时时间 (Interval)
+        # 假设为循环执行间隔，0表示不循环/单次运行
+        self.sb_interval = QSpinBox()
+        self.sb_interval.setRange(0, 86400) # 最大一天
+        self.sb_interval.setSuffix(" 秒")
+        self.sb_interval.setSpecialValueText("无 (单次运行)") # 值为0时显示文本
+        form_layout.addRow("定时/循环间隔:", self.sb_interval)
 
-    def init_ui(self):
-        """初始化主窗口UI"""
-        self.setWindowTitle("消息通知示例")
-        self.setGeometry(100, 100, 400, 200)
-        
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        layout = QVBoxLayout()
-        
-        # 测试按钮
-        btn1 = QPushButton("显示普通通知")
-        btn1.clicked.connect(self.show_normal_notification)
-        
-        btn2 = QPushButton("显示警告通知")
-        btn2.clicked.connect(self.show_warning_notification)
-        
-        btn3 = QPushButton("显示成功通知")
-        btn3.clicked.connect(self.show_success_notification)
-        
-        layout.addWidget(btn1)
-        layout.addWidget(btn2)
-        layout.addWidget(btn3)
-        
-        central_widget.setLayout(layout)
+        # 5. 最大运行时间 (Timeout)
+        # 0 表示不限制
+        self.sb_timeout = QSpinBox()
+        self.sb_timeout.setRange(0, 86400)
+        self.sb_timeout.setSuffix(" 秒")
+        self.sb_timeout.setSpecialValueText("不限制")
+        form_layout.addRow("最大运行时间:", self.sb_timeout)
 
-    def show_normal_notification(self):
-        """显示普通通知"""
-        self.notification.show_notification(
-            "系统通知", 
-            "这是一个普通的系统通知消息，将在3秒后自动消失。",
-            3000
-        )
+        main_layout.addLayout(form_layout)
 
-    def show_warning_notification(self):
-        """显示警告通知"""
-        self.notification.show_notification(
-            "警告", 
-            "这是一个警告消息！请注意系统状态。",
-            5000
-        )
+        # 底部按钮区 (确认/取消)
+        # QDialogButtonBox 自动处理不同操作系统的按钮顺序
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept) # 点击OK触发 accept()
+        self.button_box.rejected.connect(self.reject) # 点击Cancel触发 reject()
+        main_layout.addWidget(self.button_box)
 
-    def show_success_notification(self):
-        """显示成功通知"""
-        self.notification.show_notification(
-            "操作成功", 
-            "您的操作已成功完成！数据已保存到数据库。",
-            4000
-        )
+    def open_file_dialog(self):
+        """打开文件选择器"""
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择运行程序", "", "Executables (*.exe *.py *.sh *.bat);;All Files (*)")
+        if file_path:
+            self.le_task_cmd.setText(file_path)
 
+    def load_config_to_ui(self):
+        """将传入的字典数据填充到UI控件中"""
+        self.le_task_name.setText(self.current_config.get("name", ""))
+        self.le_task_cmd.setText(self.current_config.get("command", ""))
+        self.le_cmd_args.setText(self.current_config.get("args", ""))
+        self.sb_interval.setValue(int(self.current_config.get("interval", 0)))
+        self.sb_timeout.setValue(int(self.current_config.get("timeout", 0)))
+
+    def get_config(self) -> dict:
+        """获取UI上的最新数据，返回字典"""
+        return {
+            "name": self.le_task_name.text().strip(),
+            "command": self.le_task_cmd.text().strip(),
+            "args": self.le_cmd_args.text().strip(),
+            "interval": self.sb_interval.value(),
+            "timeout": self.sb_timeout.value()
+        }
+
+# ==========================================
+# 使用示例 (模拟主程序调用)
+# ==========================================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # 设置应用程序样式
-    app.setStyle("Fusion")
+    # 模拟一个旧配置
+    old_config = {
+        "name": "DataProcessor",
+        "command": "python.exe",
+        "args": "main.py --verbose",
+        "interval": 60,  # 60秒跑一次
+        "timeout": 0     # 不限制
+    }
+
+    # 1. 创建对话框实例
+    dialog = TaskConfigDialog(config=old_config)
     
-    window = MainWindow()
-    window.show()
+    # 2. 模态显示 (exec 会阻塞直到窗口关闭)
+    result = dialog.exec()
     
-    sys.exit(app.exec())
+    # 3. 判断用户点击的是"确认"还是"取消"
+    if result == QDialog.Accepted:
+        new_config = dialog.get_config()
+        print("用户点击了保存:")
+        print(new_config)
+    else:
+        print("用户取消了操作")
+
+    sys.exit()
