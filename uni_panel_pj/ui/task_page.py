@@ -13,33 +13,35 @@ from PySide6.QtGui import (
     QPainter, QColor, QAction, QPixmap, QGuiApplication,
     QIcon, QBrush, QPen, QFont, QImage, QRegion, 
 )
-from typing import Optional
+from typing import Optional, Dict
 from uni_panel_pj.Qt_process_manager import ProcessManager
 
-
-
 class complex_config_page(QDialog):
-    def __init__(self, dict:Optional[dict] = None):
+    def __init__(self, config:Optional[dict] = None,create_new:bool = False,modify_task:bool = False):
         super().__init__()
+        self.modify_task = modify_task
+        self.create_new = create_new
         self.setWindowTitle("任务配置")
         self.resize(450, 300)
         self.main_layout = QVBoxLayout()
         self.Form = QFormLayout()
         self.main_layout.addLayout(self.Form)
-        self.dict = dict if dict else {}
+        self.config = config if config else {}
+        self.return_dict = {}
         self.setup_ui()
 
         self.load_config_to_ui()
         
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.button_box.accepted.connect(self.accept) # 点击OK触发 accept()
-        self.button_box.rejected.connect(self.reject) # 点击Cancel触发 reject()
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
         self.main_layout.addWidget(self.button_box)
         self.setLayout(self.main_layout)
-        self.show()
+
     def setup_ui(self):
         self.task_path, self.task_cmd, self.cmd_args = QLineEdit(), QLineEdit(), QLineEdit()
-        
+        self.task_name = QLineEdit()
+        self.task_name.setPlaceholderText("请输入任务名称，必选")
         self.task_cmd.setObjectName("task_cmd")
         self.task_cmd.setPlaceholderText("请输入程序路径，必选")
         self.task_cmd_btn = QPushButton("选择程序")
@@ -83,11 +85,14 @@ class complex_config_page(QDialog):
         self.set_time_layout.addWidget(self.auto_restart)
 
         self.main_layout.addLayout(self.set_time_layout)
+        self.Form.addRow("任务名称",self.task_name)
         self.Form.addRow("运行时间",self.max_exec_time)
         self.Form.addRow("运行路径",self.task_path_layout)
         self.Form.addRow("运行程序",self.task_cmd_layout)
         self.Form.addRow("运行参数",self.cmd_args)
-
+        if self.modify_task:
+            self.task_name.setReadOnly(True)
+            self.task_name.setToolTip("已创建的任务不可修改任务名")
     def task_path_select(self):
         file_path = QFileDialog.getExistingDirectory(self, "选择目录",)
         if file_path:
@@ -96,20 +101,30 @@ class complex_config_page(QDialog):
         file_name,_ = QFileDialog.getOpenFileName(self, "选择程序",)
         if file_name:
             self.task_cmd.setText(file_name)
+            
     def load_config_to_ui(self):
-        if self.dict and self.dict != {}: 
-            self.task_cmd.setText(self.dict["task_cmd"])
-            self.task_path.setText(self.dict["task_path"])
-            self.cmd_args.setText(self.dict["cmd_args"])
-            self.start_up.setChecked(self.dict["start_up"])
-            self.auto_restart.setChecked(self.dict["auto_restart"])
-            self.max_exec_time.setValue(self.dict["max_exec_time"])
-            self.start_time_hour.setValue(self.dict["start_time_hour"])
-            self.start_time_minute.setValue(self.dict["start_time_minute"])
-            self.enable_timer.setChecked(self.dict["enable_timer"])
+        if self.config:
+            self.task_name.setText(self.config.get("name", ""))
+            self.task_cmd.setText(self.config.get("task_cmd", ""))
+            self.task_path.setText(self.config.get("task_path", ""))
+            self.cmd_args.setText(self.config.get("cmd_args", ""))
+            self.start_up.setChecked(self.config.get("start_up", False))
+            self.auto_restart.setChecked(self.config.get("auto_restart", False))
+            self.max_exec_time.setValue(self.config.get("max_exec_time", 0))
+            self.start_time_hour.setValue(self.config.get("start_time_hour", 0))
+            self.start_time_minute.setValue(self.config.get("start_time_minute", 0))
+            self.enable_timer.setChecked(self.config.get("enable_timer", False))
 
     def accept(self) -> None:
-        self.return_dict = {
+        if not self.task_name.text():
+            self.alert("任务名称不能为空")
+            return
+        if not self.task_cmd.text():
+            self.alert("程序路径不能为空")
+            return
+
+        ui_dict = {
+            "name": self.task_name.text(),
             "task_cmd": self.task_cmd.text(),
             "task_path": self.task_path.text(),
             "cmd_args": self.cmd_args.text(),
@@ -120,182 +135,155 @@ class complex_config_page(QDialog):
             "start_time_minute": self.start_time_minute.value(),
             "enable_timer": self.enable_timer.isChecked(),
         }
-        for i in self.dict:
-            if i not in self.return_dict:
-                self.return_dict[i] = self.dict[i]
-        return super().accept()
 
+        is_modified = False
+        if not self.create_new:
+            for key, value in ui_dict.items():
+                if self.config.get(key) != value:
+                    is_modified = True
+                    break
 
+        if (not is_modified) and self.modify_task:#未修改配置，则直接结束
+            return super().reject()
+        if is_modified:
+            reply = QMessageBox.question(self, '保存修改?', '任务配置已修改，是否保存?',
+                                         QMessageBox.Save | QMessageBox.Cancel, QMessageBox.Save)
+            if reply == QMessageBox.Cancel:
+                return 
 
-
+        self.return_dict = ui_dict
+        super().accept()
+    def reject(self) -> None:
+        return super().reject()
+    def alert(self,msg:str):
+        QMessageBox.information(self, "提示", msg)
 
 
 class task_page(QWidget):
     def __init__(self, ProcessManager:ProcessManager):
         super().__init__()
-        self.Vlayout = QVBoxLayout()
-        self.QStackedWidget = QStackedWidget() #堆叠窗口
-
-        self.task_list_widget = QComboBox() #选择窗口
-        self.task_list_widget.currentIndexChanged.connect(self.task_list_idx_change)
-        #self.Vlayout.addWidget(QPushButton("添加任务"))
-        self.Vlayout.addWidget(self.task_list_widget)
-        self.Vlayout.addWidget(self.QStackedWidget)
-        self.setLayout(self.Vlayout)
-
-        #self.task_list = [] #任务列表
         self.ProcessManager = ProcessManager
-        
-        #self.task_list_widget.addItems(self.task_list)
+        self.output_widgets: Dict[str, QPlainTextEdit] = {}
+        self.ui_init()
+        self.add_new_task_page()
 
-        self.add_default_task_page()
-    def task_list_idx_change(self, idx:int):
-        """修改stackedWidget页面"""
+    def ui_init(self):
+        self.main_Hlayout = QHBoxLayout()
+        left_sidebar_layout = QVBoxLayout()
+
+        self.task_list = QListWidget()
+        self.task_list.currentRowChanged.connect(self.task_list_idx_change)
+        self.task_list.setFixedWidth(120)
+
+        self.QStackedWidget = QStackedWidget()
+
+        add_task_btn = QPushButton("添加任务")
+        add_task_btn.clicked.connect(self.handle_add_new_task_button)
+
+        left_sidebar_layout.addWidget(add_task_btn)
+        left_sidebar_layout.addWidget(self.task_list)
+        
+        self.main_Hlayout.addLayout(left_sidebar_layout)
+        self.main_Hlayout.addWidget(self.QStackedWidget)
+        self.setLayout(self.main_Hlayout)
+
+    def handle_add_new_task_button(self):
+        self.add_new_task({})
+
+    def add_new_task(self, config_dict: dict, is_new:bool = True):
+        TaskConfigDialog = complex_config_page(config_dict, create_new=is_new)
+        result = TaskConfigDialog.exec()
+        if result == QDialog.Accepted:
+            config_dict.update(TaskConfigDialog.return_dict)
+            self.ProcessManager.add_task(config_dict, self)
+
+    def task_list_idx_change(self, idx: int):
         self.QStackedWidget.setCurrentIndex(idx)
-    def default_task_page(self, ) -> QWidget:
-        """默认任务页面,name 和其他参数是分开的"""
+
+    def create_new_task_page(self) -> QWidget:
         widget = QWidget()
         Vlayout = QVBoxLayout()
         widget.setLayout(Vlayout)
-        widget.setObjectName("ui_task_page_default")
-        task_name = QLineEdit()
-        task_complex_page = QPushButton("详细任务配置")
-        dict = {}
-        task_complex_page.clicked.connect(lambda: self.config_load_complex_page(dict))
-        PushButton = QPushButton("创建任务")
-        PushButton.setObjectName("task_create")
-        PushButton.clicked.connect(lambda: self.submit_task(task_name.text(),dict))
-        #PushButton.clicked.connect(lambda: self.add_text(widget.objectName()))
-
-        Vlayout.addWidget(task_name)
-        Vlayout.addWidget(task_complex_page)
-        Vlayout.addWidget(PushButton)
-
-
-        return widget
-    def config_load_complex_page(self,dict:dict):
-        TaskConfigDialog = complex_config_page(dict)
-        result = TaskConfigDialog.exec()
-        if result == QDialog.Accepted:
-            for key in TaskConfigDialog.return_dict:   #更新dict
-                dict[key] = TaskConfigDialog.return_dict[key]
-            print("dict已被更新")
-    def submit_task(self,name:str,dict:dict):
-        if not name:
-            self.alert("请输入任务名称")
-            return
-        if dict["task_cmd"] == "":
-            self.alert("请输入任务命令")
-            return
-        dict["name"] = name
-        self.ProcessManager.add_task(dict,self)
-    def alert(self,msg:str):
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("提示")
-        msg_box.setText(msg)
-        msg_box.setIcon(QMessageBox.Information)  # 设置图标为信息类型
-        msg_box.exec()
-
-    def add_default_task_page(self):
-        self.task_list_widget.addItem("新增任务")
-        self.QStackedWidget.addWidget(self.default_task_page())
-        self.QStackedWidget.setCurrentIndex(self.QStackedWidget.count())
         
-    def add_config_task_page(self,process_dict:dict):
-        """任务配置页面"""
+        label = QLabel("点击左上角 '添加任务' 来创建新任务")
+        label.setAlignment(Qt.AlignCenter)
+        Vlayout.addWidget(label)
+        
+        return widget
+
+    def alert(self,msg:str):
+        QMessageBox.information(self, "提示", msg)
+
+    def add_new_task_page(self):
+        self.task_list.addItem("新增任务")
+        self.QStackedWidget.addWidget(self.create_new_task_page())
+        self.QStackedWidget.setCurrentIndex(self.QStackedWidget.count() - 1)
+        
+    def add_config_task_page(self, process_dict: dict):
         widget = QWidget()
         Vlayout = QVBoxLayout()
         widget.setLayout(Vlayout)
         widget.setObjectName(process_dict["name"])
-        task_name = QLineEdit()
-        task_name.setText(process_dict["name"])
-        task_complex_page = QPushButton("详细任务配置")
-        dict = process_dict
-        task_complex_page.clicked.connect(lambda: self.config_load_complex_page(dict))
 
+        task_name_label = QLabel(f"任务: {process_dict['name']}")
+        task_complex_page = QPushButton("详细任务配置")
+        task_complex_page.clicked.connect(lambda: self.change_config_task_page(process_dict))
 
         output = QPlainTextEdit()
         output.setReadOnly(True)
-        output.setObjectName("output")
+        self.output_widgets[process_dict["name"]] = output
 
-        Vlayout.addWidget(task_name)
+        Vlayout.addWidget(task_name_label)
         Vlayout.addWidget(task_complex_page)
         Vlayout.addWidget(output)
+        
         run_Hlayout = QHBoxLayout()
         runButton = QPushButton("运行")
-        runButton.setObjectName("task_run")
         runButton.clicked.connect(lambda: self.ProcessManager.start_process(process_dict["name"]))
         stopButton = QPushButton("停止")
-        stopButton.setObjectName("task_stop")
         stopButton.clicked.connect(lambda: self.ProcessManager.stop_process(process_dict["name"]))
         restartButton = QPushButton("重启")
-        restartButton.setObjectName("task_restart")
+        restartButton.clicked.connect(lambda: self.ProcessManager.restart_process(process_dict["name"]))
+        
         run_Hlayout.addWidget(runButton)
         run_Hlayout.addWidget(stopButton)
         run_Hlayout.addWidget(restartButton)
         Vlayout.addLayout(run_Hlayout)
 
-        self.task_list_widget.addItem(process_dict["name"])
+        item = QListWidgetItem(process_dict["name"])
+        self.task_list.addItem(item)
         self.QStackedWidget.addWidget(widget)
         return widget
 
     def change_config_task_page(self, process_dict:dict):
         """修改当前任务配置页面"""
-        print(process_dict)
+        # This method can be expanded to update the UI if a task's config changes
+        TaskConfigDialog = complex_config_page(process_dict, create_new=False, modify_task=True)
+        result = TaskConfigDialog.exec()
+        if result == QDialog.Accepted:
+            process_dict.update(TaskConfigDialog.return_dict)
+            self.ProcessManager.modify(config_dict, self)
+        print(f"UI received request to update for task: {process_dict['name']}")
+
     def del_config_task_page(self, process_dict:dict):
         """删除当前任务配置页面"""
-        print(process_dict)
-    def add_text(self,name,text:str):
-        self.findChild(QWidget,name=name).findChild(QPlainTextEdit,name="output").appendPlainText(text)
+        name_to_delete = process_dict["name"]
+        
+        # Remove from output widget cache
+        if name_to_delete in self.output_widgets:
+            del self.output_widgets[name_to_delete]
+            
+        # Find and remove from QListWidget and QStackedWidget
+        for i in range(self.task_list.count()):
+            item = self.task_list.item(i)
+            if item and item.text() == name_to_delete:
+                self.task_list.takeItem(i)
+                widget_to_remove = self.QStackedWidget.widget(i)
+                self.QStackedWidget.removeWidget(widget_to_remove)
+                if widget_to_remove:
+                    widget_to_remove.deleteLater()
+                break
 
-
-class mainWindow(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.sidebar_list:list[dict] = []
-        self.ProcessManager = ProcessManager()
-        self.backend_init()
-        self.initUI()
-    def backend_init(self):
-        """自启动程序"""
-        self.task_page = task_page(self.ProcessManager)
-        self.task_page2 = task_page(self.ProcessManager)
-        self.sidebar_list.append({"name":"任务管理", "instance": self.task_page})
-        self.sidebar_list.append({"name":"任务管理2", "instance": self.task_page2})
-        pass
-
-    def initUI(self):
-        self.central_wid = QWidget()
-        self.main_wid = QHBoxLayout()
-        self.siderBar = self.sideBar_init()
-        self.content = self.content_init()
-
-        self.main_wid.addWidget(self.siderBar)
-        self.main_wid.addWidget(self.content)
-
-        self.central_wid.setLayout(self.main_wid)
-        self.central_wid.show()
-    def sideBar_init(self) ->QListWidget:
-        sideBar = QListWidget()
-        sideBar.setFont(QFont("Arial", 15))
-        sideBar.setFixedWidth(100)
-        sideBar.itemClicked.connect(self.onclick)
-        for i in range(len(self.sidebar_list)):
-            task = QListWidgetItem(self.sidebar_list[i]["name"])
-            task.setData(Qt.UserRole,i)
-            sideBar.addItem(task)
-        return sideBar
-    def content_init(self) -> QStackedWidget:
-        content = QStackedWidget()
-        for dict_obj in self.sidebar_list:
-            page = dict_obj["instance"]
-            content.addWidget(page)
-
-        return content
-    def onclick(self, item: QListWidgetItem) -> None:
-        data =  item.data(Qt.UserRole)
-        self.content.setCurrentIndex(data)
-        print(data)
-app = QApplication([])
-window = mainWindow()
-app.exec()
+    def add_text(self, name: str, text: str):
+        if name in self.output_widgets:
+            self.output_widgets[name].appendPlainText(text)

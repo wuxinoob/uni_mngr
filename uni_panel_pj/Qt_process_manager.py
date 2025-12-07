@@ -4,7 +4,7 @@ from PySide6.QtCore import QObject, QProcess, Signal, Slot, QCoreApplication, QT
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QTextEdit, QWidget
 
 # -----------------------------------------------------------------------------
-# 1. 进程管理器 (核心大脑)
+# 1. 进程管理器
 # -----------------------------------------------------------------------------
 class ProcessManager(QObject):
     # 发送给 UI 的信号
@@ -27,6 +27,11 @@ class ProcessManager(QObject):
         self.task_status[process_dict["name"]] = process_dict
         ui_obj.add_config_task_page(self.task_status[process_dict["name"]])
         #在这一部分要添加前端的任务列表与新页面，写入配置文件持久化
+    def modify_task(self, process_dict:dict, ui_obj):
+        """任务名不变，只有参数变，先停止任务，再修改配置"""
+        self.stop_process(process_dict["name"])
+        process_dict["status"] = "stopped"
+        self.task_status[process_dict["name"]] = process_dict
     def change_task_attributes(self, name:str, command:str, args):
         if name in self.task_status:
             self.task_status[name]["task_cmd"] = command
@@ -52,7 +57,7 @@ class ProcessManager(QObject):
         # 当有输出时，调用 handle_output
         process.setProcessChannelMode(QProcess.MergedChannels)
         process.readyRead.connect(lambda: self.handle_output(name))
-        
+
         
         self.task_status[name]["instance"] = process
         process.start()
