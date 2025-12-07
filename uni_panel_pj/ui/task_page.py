@@ -15,6 +15,7 @@ from PySide6.QtGui import (
 )
 from typing import Optional, Dict
 from uni_panel_pj.core.Qt_process_manager import ProcessManager
+from uni_panel_pj.ui.animated_stacked_widget import AnimatedStackedWidget
 
 class complex_config_page(QDialog):
     def __init__(self, config:Optional[dict] = None,create_new:bool = False,modify_task:bool = False):
@@ -45,6 +46,7 @@ class complex_config_page(QDialog):
         self.task_cmd.setObjectName("task_cmd")
         self.task_cmd.setPlaceholderText("请输入程序路径，必选")
         self.task_cmd_btn = QPushButton("选择程序")
+        self.task_cmd_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
         self.task_cmd_btn.clicked.connect(self.task_cmd_select)
         self.task_cmd_layout = QHBoxLayout()
         self.task_cmd_layout.addWidget(self.task_cmd)
@@ -54,6 +56,7 @@ class complex_config_page(QDialog):
         self.task_path.setObjectName("task_path")
         self.task_path.setPlaceholderText("请输入程序运行目录，可留空")
         self.task_path_btn = QPushButton("选择目录")
+        self.task_path_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         self.task_path_btn.clicked.connect(self.task_path_select)
         self.task_path_layout = QHBoxLayout()
         self.task_path_layout.addWidget(self.task_path)
@@ -176,12 +179,14 @@ class task_page(QWidget):
         left_sidebar_layout = QVBoxLayout()
 
         self.task_list = QListWidget()
+        self.task_list.setFont(QFont("Segoe UI", 12))
         self.task_list.currentRowChanged.connect(self.task_list_idx_change)
-        self.task_list.setFixedWidth(120)
+        self.task_list.setFixedWidth(160)
 
-        self.QStackedWidget = QStackedWidget()
+        self.QStackedWidget = AnimatedStackedWidget()
 
         add_task_btn = QPushButton("添加任务")
+        add_task_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder))
         add_task_btn.clicked.connect(self.handle_add_new_task_button)
 
         left_sidebar_layout.addWidget(add_task_btn)
@@ -221,7 +226,7 @@ class task_page(QWidget):
     def add_new_task_page(self):
         self.task_list.addItem("新增任务")
         self.QStackedWidget.addWidget(self.create_new_task_page())
-        self.QStackedWidget.setCurrentIndex(self.QStackedWidget.count() - 1)
+        self.QStackedWidget.setCurrentIndex(0) # Start at the first page
         
     def add_config_task_page(self, process_dict: dict):
         widget = QWidget()
@@ -239,6 +244,7 @@ class task_page(QWidget):
         header_layout.addStretch() # Add spacer to push the next widgets to the right
         
         task_complex_page = QPushButton("详细任务配置")
+        task_complex_page.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
         task_complex_page.clicked.connect(lambda: self.change_config_task_page(process_dict))
         header_layout.addWidget(task_complex_page)
         Vlayout.addLayout(header_layout)
@@ -253,6 +259,7 @@ class task_page(QWidget):
         input_field = QLineEdit()
         input_field.setPlaceholderText("在这里输入并回车发送消息...")
         send_button = QPushButton("发送")
+        send_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOkButton))
         
         input_layout.addWidget(input_field)
         input_layout.addWidget(send_button)
@@ -264,13 +271,16 @@ class task_page(QWidget):
 
         run_Hlayout = QHBoxLayout()
         runButton = QPushButton("运行")
+        runButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         runButton.clicked.connect(lambda: self.ProcessManager.start_process(process_dict["name"]))
         stopButton = QPushButton("停止")
+        stopButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
         stopButton.clicked.connect(lambda: self.ProcessManager.stop_process(process_dict["name"]))
         restartButton = QPushButton("重启")
+        restartButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
         restartButton.clicked.connect(lambda: self.ProcessManager.restart_process(process_dict["name"]))
         deleteButton = QPushButton("清除任务")
-        deleteButton.setStyleSheet("background-color: #ff4d4d;")
+        deleteButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
         deleteButton.clicked.connect(lambda: self.handle_delete_task(process_dict["name"]))
 
         run_Hlayout.addWidget(runButton)
