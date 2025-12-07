@@ -14,7 +14,7 @@ from PySide6.QtGui import (
     QIcon, QBrush, QPen, QFont, QImage, QRegion, 
 )
 from typing import Optional, Dict
-from uni_panel_pj.Qt_process_manager import ProcessManager
+from uni_panel_pj.core.Qt_process_manager import ProcessManager
 
 class complex_config_page(QDialog):
     def __init__(self, config:Optional[dict] = None,create_new:bool = False,modify_task:bool = False):
@@ -134,6 +134,7 @@ class complex_config_page(QDialog):
             "start_time_hour": self.start_time_hour.value(),
             "start_time_minute": self.start_time_minute.value(),
             "enable_timer": self.enable_timer.isChecked(),
+            "show_type": "secondlevel_page"
         }
 
         is_modified = False
@@ -164,8 +165,11 @@ class task_page(QWidget):
         super().__init__()
         self.ProcessManager = ProcessManager
         self.output_widgets: Dict[str, QPlainTextEdit] = {}
+        self.status_labels: Dict[str, QLabel] = {}
         self.ui_init()
         self.add_new_task_page()
+        self.ProcessManager.sig_status_update.connect(self.update_task_status)
+        self.ProcessManager.sig_task_cleaned.connect(self.del_config_task_page)
 
     def ui_init(self):
         self.main_Hlayout = QHBoxLayout()
@@ -195,7 +199,7 @@ class task_page(QWidget):
         result = TaskConfigDialog.exec()
         if result == QDialog.Accepted:
             config_dict.update(TaskConfigDialog.return_dict)
-            self.ProcessManager.add_task(config_dict, self)
+            self.ProcessManager.add_task(config_dict)
 
     def task_list_idx_change(self, idx: int):
         self.QStackedWidget.setCurrentIndex(idx)
@@ -225,18 +229,39 @@ class task_page(QWidget):
         widget.setLayout(Vlayout)
         widget.setObjectName(process_dict["name"])
 
+        # --- Header Layout ---
+        header_layout = QHBoxLayout()
         task_name_label = QLabel(f"任务: {process_dict['name']}")
+        status_label = QLabel(process_dict.get("status", "stopped"))
+        self.status_labels[process_dict["name"]] = status_label
+        header_layout.addWidget(task_name_label)
+        header_layout.addWidget(status_label)
+        header_layout.addStretch() # Add spacer to push the next widgets to the right
+        
         task_complex_page = QPushButton("详细任务配置")
         task_complex_page.clicked.connect(lambda: self.change_config_task_page(process_dict))
+        header_layout.addWidget(task_complex_page)
+        Vlayout.addLayout(header_layout)
 
         output = QPlainTextEdit()
         output.setReadOnly(True)
         self.output_widgets[process_dict["name"]] = output
 
-        Vlayout.addWidget(task_name_label)
-        Vlayout.addWidget(task_complex_page)
         Vlayout.addWidget(output)
+
+        input_layout = QHBoxLayout()
+        input_field = QLineEdit()
+        input_field.setPlaceholderText("在这里输入并回车发送消息...")
+        send_button = QPushButton("发送")
         
+        input_layout.addWidget(input_field)
+        input_layout.addWidget(send_button)
+        Vlayout.addLayout(input_layout)
+        
+        # Connect signals
+        send_button.clicked.connect(lambda: self.send_input_to_task(process_dict["name"], input_field))
+        input_field.returnPressed.connect(lambda: self.send_input_to_task(process_dict["name"], input_field))
+
         run_Hlayout = QHBoxLayout()
         runButton = QPushButton("运行")
         runButton.clicked.connect(lambda: self.ProcessManager.start_process(process_dict["name"]))
@@ -244,16 +269,48 @@ class task_page(QWidget):
         stopButton.clicked.connect(lambda: self.ProcessManager.stop_process(process_dict["name"]))
         restartButton = QPushButton("重启")
         restartButton.clicked.connect(lambda: self.ProcessManager.restart_process(process_dict["name"]))
-        
+        deleteButton = QPushButton("清除任务")
+        deleteButton.setStyleSheet("background-color: #ff4d4d;")
+        deleteButton.clicked.connect(lambda: self.handle_delete_task(process_dict["name"]))
+
         run_Hlayout.addWidget(runButton)
         run_Hlayout.addWidget(stopButton)
         run_Hlayout.addWidget(restartButton)
+        run_Hlayout.addWidget(deleteButton)
         Vlayout.addLayout(run_Hlayout)
 
         item = QListWidgetItem(process_dict["name"])
         self.task_list.addItem(item)
         self.QStackedWidget.addWidget(widget)
         return widget
+
+    def update_task_status(self, status_info: dict):
+        task_name = status_info.get("name")
+        status = status_info.get("status")
+        if task_name in self.status_labels:
+            label = self.status_labels[task_name]
+            label.setText(status)
+            # Optional: Style the label based on status
+            if status == "running":
+                label.setStyleSheet("color: green; font-weight: bold;")
+            elif status == "stopped":
+                label.setStyleSheet("color: red;")
+            elif status == "starting":
+                label.setStyleSheet("color: orange;")
+            else:
+                label.setStyleSheet("") # Reset to default
+
+    def send_input_to_task(self, task_name: str, input_widget: QLineEdit):
+        text = input_widget.text()
+        if text:
+            self.ProcessManager.write_to_process(task_name, text)
+            input_widget.clear()
+
+    def handle_delete_task(self, task_name: str):
+        reply = QMessageBox.question(self, '确认清除', f"你确定要清除任务 '{task_name}' 吗?\n此操作不可恢复。",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.ProcessManager.clean_task(task_name)
 
     def change_config_task_page(self, process_dict:dict):
         """修改当前任务配置页面"""
@@ -262,22 +319,24 @@ class task_page(QWidget):
         result = TaskConfigDialog.exec()
         if result == QDialog.Accepted:
             process_dict.update(TaskConfigDialog.return_dict)
-            self.ProcessManager.modify(config_dict, self)
+            self.ProcessManager.modify_task(process_dict, self)
         print(f"UI received request to update for task: {process_dict['name']}")
 
-    def del_config_task_page(self, process_dict:dict):
+    def del_config_task_page(self, name_to_delete: str):
         """删除当前任务配置页面"""
-        name_to_delete = process_dict["name"]
-        
-        # Remove from output widget cache
+        # Remove from widget caches
         if name_to_delete in self.output_widgets:
             del self.output_widgets[name_to_delete]
+        if name_to_delete in self.status_labels:
+            del self.status_labels[name_to_delete]
             
         # Find and remove from QListWidget and QStackedWidget
         for i in range(self.task_list.count()):
             item = self.task_list.item(i)
             if item and item.text() == name_to_delete:
+                # Remove from list
                 self.task_list.takeItem(i)
+                # Remove from stack
                 widget_to_remove = self.QStackedWidget.widget(i)
                 self.QStackedWidget.removeWidget(widget_to_remove)
                 if widget_to_remove:

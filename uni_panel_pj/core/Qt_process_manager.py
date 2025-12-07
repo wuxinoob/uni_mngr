@@ -2,6 +2,8 @@ import sys
 import json
 from PySide6.QtCore import QObject, QProcess, Signal, Slot, QCoreApplication, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QTextEdit, QWidget
+import time
+from datetime import datetime
 
 # -----------------------------------------------------------------------------
 # 1. 进程管理器
@@ -11,21 +13,45 @@ class ProcessManager(QObject):
     sig_log = Signal(str)          # 普通日志
     task_msg = Signal(str)      # 任务消息
     sig_status_update = Signal(dict) # 状态更新
+    sig_task_cleaned = Signal(str)   # 任务被清除
     ui_msg = Signal(str)           # UI更新专用 消息
     
     def __init__(self):
         super().__init__()
-        self.task_status = {} # 存储 { "name": {status: "running" | "stopped", task_type: "task", "dedicated_task", command: str, args: list,instance:QProcess_instance} }
+        self.task_status = {} # 存储 { "name": {status: "running" | "stopped", ...} }
         self.sig_log.connect(self.print_log)
-    def add_task(self, process_dict:dict, ui_obj):
+
+        # 设置定时任务检查器
+        self.schedule_timer = QTimer(self)
+        self.schedule_timer.timeout.connect(self.check_scheduled_tasks)
+        self.schedule_timer.start(30000) # 每30秒检查一次
+
+    def add_obj(self, main_window: QWidget,task_page: QWidget):
+        self.main_window = main_window
+        self.task_page = task_page
+    def check_scheduled_tasks(self):
+        now = datetime.now()
+        current_time = (now.hour, now.minute)
+        self.sig_log.emit(f"检查定时任务: 当前时间 {current_time}")
+
+        for name, task in self.task_status.items():
+            if task.get("enable_timer"):
+                scheduled_time = (task.get("start_time_hour"), task.get("start_time_minute"))
+                # 如果时间匹配，并且任务当前未运行
+                if current_time == scheduled_time and task.get("status") != "running":
+                    self.sig_log.emit(f"触发定时任务: {name}")
+                    self.start_process(name)
+
+    def add_task(self, process_dict:dict):
         #if ui_obj is task_page:
         if process_dict["name"] in self.task_status:
             self.sig_log.emit(f"任务名 {process_dict['name']} 已经存在，请更改任务名或删除原任务")
             return
-        process_dict["ui_obj"] = ui_obj
         process_dict["status"] = "stopped"
         self.task_status[process_dict["name"]] = process_dict
-        ui_obj.add_config_task_page(self.task_status[process_dict["name"]])
+        if process_dict["show_type"] == "secondlevel_page":
+            self.task_page.add_config_task_page(self.task_status[process_dict["name"]])
+        
         #在这一部分要添加前端的任务列表与新页面，写入配置文件持久化
     def modify_task(self, process_dict:dict, ui_obj):
         """任务名不变，只有参数变，先停止任务，再修改配置"""
@@ -43,7 +69,7 @@ class ProcessManager(QObject):
             self.sig_log.emit(f"任务 {name} 不存在")
             return
     def start_process(self, name:str):
-        if self.task_status[name]["status"] in ["running","starting"] :
+        if self.task_status.get(name,{}).get("status") in ["running","starting"] :
             self.sig_log.emit(f"任务 {name} 已经在运行中")
             return
 
@@ -64,45 +90,63 @@ class ProcessManager(QObject):
         self.sig_log.emit(f"启动进程: {name},{self.task_status[name]['task_cmd']} {self.task_status[name]['cmd_args']}")
 
     def task_status_update(self,name, state, ):
+        current_status = ""
         if state == QProcess.Running:
-            self.task_status[name]["status"] = "running"
-        if state == QProcess.NotRunning:
-            self.task_status[name]["status"] = "stopped"
-        if state == QProcess.Starting:
-            self.task_status[name]["status"] = "starting"
-        self.sig_log.emit(f"{name}运行状态变为{self.task_status[name]['status']}")
+            current_status = "running"
+        elif state == QProcess.NotRunning:
+            current_status = "stopped"
+        elif state == QProcess.Starting:
+            current_status = "starting"
+        
+        if self.task_status.get(name, {}).get("status") != current_status:
+            self.task_status[name]["status"] = current_status
+            self.sig_log.emit(f"{name}运行状态变为{current_status}")
+            self.sig_status_update.emit({'name': name, 'status': current_status})
         
         
     def clean_task(self, name):
         if name in self.task_status:
-            self.task_status[name]["instance"].kill()
-        self.task_status.pop(name)
-        #要更新前端显示
+            instance = self.task_status[name].get("instance")
+            if instance and instance.state() == QProcess.Running:
+                instance.kill()
+            self.task_status.pop(name)
+            self.sig_log.emit(f"任务 {name} 已被清除")
+            self.sig_task_cleaned.emit(name)
+        else:
+            self.sig_log.emit(f"试图清除一个不存在的任务: {name}")
 
     def stop_process(self, name):
-        if self.task_status[name]["status"] != "running":
+        if self.task_status.get(name, {}).get("status") != "running":
             self.sig_log.emit(f"任务 {name} 不在运行中，无法停止")
             return
-        self.task_status[name]["instance"].kill()
+        instance = self.task_status[name].get("instance")
+        if instance:
+            instance.kill()
 
+    def restart_process(self, name):
+        self.stop_process(name)
+        time.sleep(1)
+        self.start_process(name)
+    
 
     def load_config(self,config):
         pass
     def write_to_process(self, target_name, data_str):
         """向指定任务的 stdin 写入数据 需要重写"""
         if target_name in self.task_status:
-            proc = self.task_status[target_name]["instance"]
-            if proc.state() == QProcess.Running:
+            proc = self.task_status[target_name].get("instance")
+            if proc and proc.state() == QProcess.Running:
                 # 注意添加换行符，并转为 bytes
                 proc.write((data_str + "\n").encode('utf-8'))
             else:
-                self.sig_log.emit(f"错误: 目标任务 {target_name} 未运行")
+                self.sig_log.emit(f"错误: 目标任务 {target_name} 未运行或不存在")
 
     def handle_output(self, source_name):
         """
         核心消息处理器：读取子任务输出，并路由
         """
-        proc = self.task_status[source_name]["instance"]
+        proc = self.task_status[source_name].get("instance")
+        if not proc: return
         # 读取所有可用数据
         data_bytes = proc.readAll().data()
         try:
@@ -117,43 +161,9 @@ class ProcessManager(QObject):
             if not line: continue
             self.route_message(source_name, line)
     def route_message(self, source_name, message):
-        """demo 收到就往前端发"""
-        self.task_status[source_name]["ui_obj"].add_text(source_name, message)
+        """demo逻辑： 收到就往前端发"""
+        if (source_name in self.task_status) and self.task_status[source_name]["show_type"]=="secondlevel_page":
+            self.task_page.add_text(source_name, message)
+            
     def print_log(self, message):
         print(message)
-"""    def route_message(self, source_name, message):
-        """
-        #路由逻辑：决定消息是给 UI 还是给其他进程
-        #若
-"""
-        if self.task_status[source_name]["task_type"] == "task":
-            warped_message = json.dumps({"message": message, "task_name": source_name})
-
-            self.ui_msg.emit(warped_message)
-        try:
-            # 假设子进程输出的是 JSON
-            # 格式: {"target": "ui"|"proc_b", "content": "..."}
-            data = json.loads(message)
-            target = data.get("target")
-            content = data.get("content")
-
-            if target == "ui":
-                # 转发给前端
-                self.sig_log.emit(f"[{source_name} -> UI]: {content}")
-            
-            elif target in self.task:
-                # 转发给另一个进程 (IPC)
-                self.sig_log.emit(f"[{source_name} -> {target}]: 转发数据")
-                self.write_to_process(target, json.dumps(content)) # 再次序列化发送
-            
-            else:
-                self.sig_log.emit(f"[{source_name}]: 未知目标 {message}")
-
-        except json.JSONDecodeError:
-            # 如果不是 JSON，直接显示为普通日志
-            self.sig_log.emit(f"[{source_name} Raw]: {message}")
-
-    def cleanup_process(self, name):
-        self.sig_log.emit(f"进程 {name} 已结束")
-        # 不一定要删掉 key，看需求，这里简单处理
-        # del self.task[name]"""
