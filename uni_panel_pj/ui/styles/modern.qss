@@ -1,0 +1,222 @@
+/* Dark Modern Theme for UniPanel - Enhanced */
+
+QWidget {
+    background-color: #2c3e50; /* Dark Slate Blue */
+    color: #ecf0f1; /* Light Gray */
+    font-family: "Segoe UI", "Roboto", "Helvetica", "Arial", sans-serif;
+    font-size: 14px;
+    border-radius: 6px;
+    padding: 5px;
+}
+
+QMainWindow {
+    background-color: #233140; /* Darker Slate Blue */
+}
+
+/* PushButton Styling */
+QPushButton {
+    background-color: #3498db; /* Bright Blue */
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    margin: 4px;
+    transition: background-color 0.3s ease;
+}
+
+QPushButton:hover {
+    background-color: #2980b9; /* Darker Blue on hover */
+}
+
+QPushButton:pressed {
+    background-color: #2c3e50; /* Dark Slate Blue on press */
+}
+
+/* LineEdit Styling */
+QLineEdit {
+    background-color: #34495e; /* Wet Asphalt */
+    color: #ecf0f1;
+    border: 1px solid #2c3e50;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin: 4px;
+}
+
+QLineEdit:focus {
+    border: 1px solid #3498db; /* Bright Blue focus border */
+}
+
+/* Label Styling */
+QLabel {
+    color: #ecf0f1;
+    font-size: 14px;
+    padding: 2px;
+}
+
+/* StackedWidget Styling */
+QStackedWidget {
+    background-color: #2c3e50;
+    border: none;
+}
+
+/* Generic Item View (for lists, trees, tables) */
+QAbstractItemView {
+    background-color: #34495e;
+    color: #ecf0f1;
+    border: 1px solid #2c3e50;
+    border-radius: 6px;
+    padding: 5px;
+    selection-background-color: #3498db;
+    selection-color: #ffffff;
+}
+
+QAbstractItemView::item {
+    padding: 8px 5px;
+    margin: 2px 0px;
+}
+
+QAbstractItemView::item:hover {
+    background-color: #4a637a;
+}
+
+QAbstractItemView::item:selected {
+    background-color: #3498db;
+    color: #ffffff;
+    border: none; /* Remove selection border */
+    outline: none; /* Remove outline */
+}
+
+/* ComboBox Styling */
+QComboBox {
+    background-color: #34495e;
+    border: 1px solid #2c3e50;
+    border-radius: 4px;
+    padding: 5px;
+    min-width: 6em;
+}
+
+QComboBox:editable {
+    background-color: #2c3e50;
+}
+
+QComboBox:on { /* shift the text when the popup opens */
+    padding-top: 3px;
+    padding-left: 4px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 20px;
+    border-left-width: 1px;
+    border-left-color: #2c3e50;
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+QComboBox::down-arrow {
+    image: url(icons/down_arrow.png);
+}
+
+QComboBox QAbstractItemView {
+    border: 1px solid #2c3e50;
+    selection-background-color: #3498db;
+}
+
+/* CheckBox Styling */
+QCheckBox {
+    spacing: 5px;
+}
+
+QCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+}
+
+/* ScrollBar Styling */
+QScrollBar:vertical {
+    border: 1px solid #2c3e50;
+    background: #34495e;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #4a637a;
+    min-height: 20px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    border: 1px solid #2c3e50;
+    background: #34495e;
+    height: 10px;
+    margin: 0px 0px 0px 0px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #4a637a;
+    min-width: 20px;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* --- NEW STYLES --- */
+
+/* StyledListWidget specific styles */
+StyledListWidget {
+    border-radius: 10px;
+    border: 1px solid #2c3e50;
+}
+
+/* SpinBox Styling */
+QSpinBox {
+    padding-right: 15px; /* make room for the arrows */
+    border: 1px solid #2c3e50;
+    border-radius: 4px;
+    background-color: #34495e;
+    color: #ecf0f1;
+    padding: 5px;
+}
+
+QSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    height: 14px;
+    border-left-width: 1px;
+    border-left-color: #2c3e50;
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    background: #4a637a;
+    image: url(icons/up_arrow.png); /* You might need to provide an icon */
+}
+
+QSpinBox::up-button:hover {
+    background: #5b7a97;
+}
+
+QSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    height: 14px;
+    border-left-width: 1px;
+    border-left-color: #2c3e50;
+    border-left-style: solid;
+    border-bottom-right-radius: 3px;
+    background: #4a637a;
+    image: url(icons/down_arrow.png); /* You might need to provide an icon */
+}
+
+QSpinBox::down-button:hover {
+    background: #5b7a97;
+}

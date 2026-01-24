@@ -33,11 +33,11 @@ class mainWindow(QMainWindow):
         self.initUI()
     def load_cfg(self,config_path:str):
         if not os.path.exists(os.path.join(config_path, "UI_CONFIG.json")):
-            with open(os.path.join(_path, "UI_CONFIG.json"), "r+") as f:
+            with open(os.path.join(config_path, "UI_CONFIG.json"), "r+") as f:
                 pass
         else:
             pass #主窗口页面的配置文件
-        if os.path.exists(os.path.join(config_path, "process_manager_config.json")):
+        if not os.path.exists(os.path.join(config_path, "process_manager_config.json")):
             with open(os.path.join(config_path, "process_manager_config.json"), "r+") as f:
                 pass
         else:
