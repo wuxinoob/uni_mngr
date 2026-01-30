@@ -22,6 +22,7 @@ class ProcessManager(QObject):
         super().__init__()
         self.task_status = {} # 存储 { "name": {status: "running" | "stopped", ...} }
         self.config_path = ""
+        self.main_panel_config = {}
         self.sig_log.connect(self.print_log)
 
         # 设置定时任务检查器
@@ -35,6 +36,10 @@ class ProcessManager(QObject):
 
     def set_config_path(self, path:str):
         self.config_path = path
+
+    def set_main_panel_config(self, config: dict):
+        """接收主程序的配置字典"""
+        self.main_panel_config = config
 
     def _save_config(self):
         """保存配置到JSON文件，会移除QProcess等无法序列化的实例"""
@@ -56,6 +61,12 @@ class ProcessManager(QObject):
 
     def _update_app_autostart_status(self):
         """检查所有任务，并统一设置应用的开机自启状态"""
+        # 首先检查总开关
+        if not self.main_panel_config.get("master_autostart", True):
+            manage_app_autostart(False)
+            self.sig_log.emit("主程序开机自启已禁用，将移除所有自启任务。")
+            return
+            
         should_autostart = any(task.get("start_up") for task in self.task_status.values())
         manage_app_autostart(should_autostart)
 

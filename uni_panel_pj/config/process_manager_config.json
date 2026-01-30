@@ -12,5 +12,19 @@
         "enable_timer": false,
         "show_type": "secondlevel_page",
         "status": "stopped"
+    },
+    "cmd1": {
+        "name": "cmd1",
+        "task_cmd": "cmd",
+        "task_path": "",
+        "cmd_args": "",
+        "start_up": false,
+        "auto_restart": false,
+        "max_exec_time": 0,
+        "start_time_hour": 0,
+        "start_time_minute": 0,
+        "enable_timer": false,
+        "show_type": "secondlevel_page",
+        "status": "stopped"
     }
 }
