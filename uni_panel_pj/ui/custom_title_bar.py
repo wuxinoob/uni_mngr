@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QStyle
-from PySide6.QtCore import Qt, QPoint, Signal
+from PySide6.QtCore import Qt, QPoint, Signal, Slot
 from PySide6.QtGui import QMouseEvent
 
 class CustomTitleBar(QWidget):
@@ -15,7 +15,7 @@ class CustomTitleBar(QWidget):
         self.icon_label = QLabel()
         self.title_label = QLabel("通用面板")
         self.minimize_button = QPushButton("—")
-        self.maximize_button = QPushButton("⬜")
+        self.maximize_button = QPushButton() # Text set dynamically
         self.close_button = QPushButton("✕")
 
         # --- 样式和布局 ---
@@ -47,16 +47,37 @@ class CustomTitleBar(QWidget):
         self.minimize_button.clicked.connect(self.on_minimize_clicked)
         self.maximize_button.clicked.connect(self.on_maximize_clicked)
         self.close_button.clicked.connect(self.on_close_clicked)
-        
+
         # --- 拖动所需变量 ---
         self._is_dragging = False
         self._drag_start_pos = QPoint()
+        self._connection_established = False # 确保信号只连接一次
+
+        self.update_maximize_icon() # Set initial icon
+
+    def showEvent(self, event):
+        """在窗口显示时，确保信号已连接"""
+        if self.parent_window and not self._connection_established:
+            self.parent_window.windowHandle().windowStateChanged.connect(self.update_maximize_icon)
+            self._connection_established = True
+        super().showEvent(event)
 
     def set_icon(self, icon):
         self.icon_label.setPixmap(icon.pixmap(24, 24))
 
     def set_title(self, title):
         self.title_label.setText(title)
+
+    @Slot()
+    def update_maximize_icon(self):
+        """根据窗口状态更新最大化/恢复按钮的图标"""
+        if self.parent_window and self.parent_window.isMaximized():
+            self.maximize_button.setText("🗗") # Restore icon
+            self.maximize_button.setToolTip("Restore")
+        else:
+            self.maximize_button.setText("🗖") # Maximize icon
+            self.maximize_button.setToolTip("Maximize")
+
 
     # --- 窗口控制槽函数 ---
     def on_minimize_clicked(self):
@@ -67,27 +88,22 @@ class CustomTitleBar(QWidget):
             self.parent_window.showNormal()
         else:
             self.parent_window.showMaximized()
+        # The icon will be updated via the windowStateChanged signal
 
     def on_close_clicked(self):
         self.parent_window.close()
 
-    # --- 鼠标事件处理，用于拖动窗口 ---
+    # --- 鼠标事件处理 ---
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._is_dragging = True
-            self._drag_start_pos = event.globalPosition().toPoint() - self.parent_window.frameGeometry().topLeft()
+            if self.parent_window.isMaximized():
+                return 
+            
+            # 使用系统原生移动，极大提升流畅度并支持 Windows 分屏特性
+            # 注意：startSystemMove 会阻塞直到拖动结束
+            self.parent_window.windowHandle().startSystemMove()
             event.accept()
 
-    def mouseMoveEvent(self, event: QMouseEvent):
-        if self._is_dragging and event.buttons() & Qt.MouseButton.LeftButton:
-            new_pos = event.globalPosition().toPoint() - self._drag_start_pos
-            self.parent_window.move(new_pos)
-            event.accept()
-
-    def mouseReleaseEvent(self, event: QMouseEvent):
-        self._is_dragging = False
-        event.accept()
-        
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         """双击标题栏最大化/恢复"""
         if event.button() == Qt.MouseButton.LeftButton:

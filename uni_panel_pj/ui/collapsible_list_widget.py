@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QListWidget, 
-    QListWidgetItem, QSizePolicy, QStyledItemDelegate, QStyle, QStyleOptionViewItem
+    QListWidgetItem, QSizePolicy, QStyledItemDelegate, QStyle, QStyleOptionViewItem, QApplication
 )
 from PySide6.QtCore import (
     Qt, QPropertyAnimation, QEasingCurve, QSize, Signal
@@ -23,17 +23,20 @@ class CollapsibleListWidget(QWidget):
 
         # --- UI 组件 ---
         self.toggle_button = QPushButton()
+        self.toggle_button.setObjectName("sidebarToggleButton") # Set object name for styling
         self.toggle_button.setCheckable(True)
         self.toggle_button.setChecked(False) # 默认展开
         self._update_button_icon()
 
         self.list_widget = QListWidget()
-        self.list_widget.setItemDelegate(IconOnlyDelegate(self.list_widget))
+        self.list_widget.setIconSize(QSize(24, 24)) # Set a standard icon size
+        # Pass collapsed_width to delegate
+        self.list_widget.setItemDelegate(IconOnlyDelegate(self.list_widget, self.collapsed_width))
 
         # --- 布局 ---
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setSpacing(0) # Remove spacing to integrate button with list
         layout.addWidget(self.toggle_button)
         layout.addWidget(self.list_widget)
 
@@ -49,6 +52,8 @@ class CollapsibleListWidget(QWidget):
         # --- 初始化状态 ---
         self.setMaximumWidth(self.expanded_width)
         self.list_widget.viewMode = QListWidget.ViewMode.ListMode
+        # 禁用水平滚动条
+        self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
     def _update_button_icon(self):
         """根据折叠状态更新按钮图标"""
@@ -92,23 +97,44 @@ class CollapsibleListWidget(QWidget):
 
 # 为了实现文本的“缩进”（即隐藏），我们需要一个自定义委托
 class IconOnlyDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, collapsed_width=55):
         super().__init__(parent)
         self._is_collapsed = False
+        self._collapsed_width = collapsed_width
 
     def set_collapsed(self, collapsed: bool):
         self._is_collapsed = collapsed
 
     def paint(self, painter: QPainter, option, index):
-        # 如果是折叠状态，则不绘制文本
+        # 如果是折叠状态，则不绘制文本，且居中绘制图标
         if self._is_collapsed:
-            # 复制一份 option 来修改
-            option_copy = QStyleOptionViewItem(option)
-            option_copy.text = ""
-            super().paint(painter, option_copy, index)
+            # 1. 绘制背景（选中/悬停状态）
+            style = option.widget.style() if option.widget else QApplication.style()
+            style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter, option.widget)
+
+            # 2. 获取并绘制图标
+            icon = index.data(Qt.ItemDataRole.DecorationRole)
+            if icon and isinstance(icon, QIcon):
+                # 计算居中位置
+                icon_size = option.decorationSize
+                rect = option.rect
+                
+                # 确保在可视宽度内居中
+                available_width = min(rect.width(), self._collapsed_width)
+                x = rect.left() + (available_width - icon_size.width()) // 2
+                y = rect.top() + (rect.height() - icon_size.height()) // 2
+                
+                # 绘制
+                icon.paint(painter, x, y, icon_size.width(), icon_size.height(), 
+                           Qt.AlignmentFlag.AlignCenter, QIcon.Mode.Normal, QIcon.State.On)
         else:
+            # 展开状态：使用默认绘制
             super().paint(painter, option, index)
 
     def sizeHint(self, option, index):
+        # 如果折叠，强制返回固定宽度，忽略文本宽度
+        if self._is_collapsed:
+            return QSize(self._collapsed_width, 40)
+        
         # 保持原始尺寸提示，防止列表在折叠时跳动
         return super().sizeHint(option, index)

@@ -17,6 +17,22 @@ from typing import Optional
 from uni_panel_pj.core.Qt_process_manager import ProcessManager
 from uni_panel_pj.ui.task_page import task_page
 from uni_panel_pj.ui.settings_page import SettingsPage
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QLabel, QHBoxLayout, QMenu,
+    QSystemTrayIcon, QStyle, QPushButton, QListWidget,
+    QListWidgetItem, QVBoxLayout, QStackedWidget, QLineEdit,
+    QLayout, QFormLayout, QPlainTextEdit, QComboBox, QDialog, QFileDialog, QDialogButtonBox,
+    QSpinBox, QCheckBox ,QMessageBox, QMainWindow, QFrame, QGraphicsDropShadowEffect
+)
+from PySide6.QtCore import (Qt, QTimer, QPoint, QRectF, Signal, QThread, QPropertyAnimation, QEasingCurve, QBuffer, QRect, QProcess, Slot)
+from PySide6.QtGui import (
+    QPainter, QColor, QAction, QPixmap, QGuiApplication,
+    QIcon, QBrush, QPen, QFont, QImage, QRegion, 
+)
+from typing import Optional
+from uni_panel_pj.core.Qt_process_manager import ProcessManager
+from uni_panel_pj.ui.task_page import task_page
+from uni_panel_pj.ui.settings_page import SettingsPage
 from uni_panel_pj.ui.animated_stacked_widget import AnimatedStackedWidget
 from uni_panel_pj.ui.collapsible_list_widget import CollapsibleListWidget
 from uni_panel_pj.ui.custom_title_bar import CustomTitleBar
@@ -28,10 +44,11 @@ class mainWindow(QMainWindow):
     def __init__(self,config_path:str):
         super().__init__()
         self.setWindowTitle("通用面板")
-        self.resize(800, 600)
+        self.resize(830, 630) # 稍微加大一点以适应阴影边距
         
-        # 设置无边框窗口
+        # 设置无边框窗口和背景透明
         self.setWindowFlag(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
 
         # 设置图标（使用内置标准图标作为占位符）
         self.app_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
@@ -127,7 +144,10 @@ class mainWindow(QMainWindow):
         self.ui_config_path = os.path.join(self.config_path, "UI_config.json")
         default_ui_config = {
             "theme": "dark",
-            "master_autostart": True
+            "master_autostart": True,
+            "window_opacity": 1.0,
+            "app_font": "Segoe UI",
+            "app_font_size": 11
         }
         try:
             if not os.path.exists(self.ui_config_path):
@@ -135,13 +155,20 @@ class mainWindow(QMainWindow):
                 self._save_main_config()
             else:
                 with open(self.ui_config_path, "r", encoding='utf-8') as f:
-                    self.main_config = json.load(f)
+                    loaded_config = json.load(f)
+                    # 合并默认配置，确保新添加的设置项存在
+                    for key, value in default_ui_config.items():
+                        if key not in loaded_config:
+                            loaded_config[key] = value
+                    self.main_config = loaded_config
         except (json.JSONDecodeError, IOError) as e:
             print(f"无法加载UI配置文件，将使用默认配置: {e}")
             self.main_config = default_ui_config
         
-        # 启动时应用主题
+        # 启动时应用主题、透明度和字体
         self._apply_theme(self.main_config.get("theme", "dark"))
+        self.setWindowOpacity(self.main_config.get("window_opacity", 1.0))
+        self._apply_font()
 
         # --- 加载进程管理器配置 ---
         process_config_path = os.path.join(self.config_path, "process_manager_config.json")
@@ -172,6 +199,13 @@ class mainWindow(QMainWindow):
         print(f"应用主题: {theme_name}")
         qdarktheme.setup_theme(theme_name)
 
+    def _apply_font(self):
+        """应用全局字体"""
+        font_family = self.main_config.get("app_font", "Segoe UI")
+        font_size = int(self.main_config.get("app_font_size", 11)) # Ensure int
+        font = QFont(font_family, font_size)
+        QApplication.setFont(font)
+
     @Slot(str, object)
     def _on_setting_changed(self, key: str, value: object):
         """处理来自设置页面的信号"""
@@ -183,8 +217,9 @@ class mainWindow(QMainWindow):
             if key == "theme":
                 self._apply_theme(value)
             elif key == "master_autostart":
-                # 当总开关变化时，立即更新注册表状态
                 self.ProcessManager._update_app_autostart_status()
+            elif key == "window_opacity":
+                self.setWindowOpacity(value)
 
     def backend_init(self):
         """后端初始化 & 传递必要的对象"""
@@ -194,13 +229,32 @@ class mainWindow(QMainWindow):
         self.ProcessManager.add_obj(self,self.task_page)
 
     def initUI(self):
+        # 1. 设置中心部件为完全透明
         central_wid = QWidget()
+        central_wid.setAttribute(Qt.WA_TranslucentBackground)
         self.setCentralWidget(central_wid)
         
-        # 主布局：垂直布局，顶部是标题栏，底部是内容
-        main_layout = QVBoxLayout(central_wid)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        # 2. 根布局，留出边距给阴影
+        root_layout = QVBoxLayout(central_wid)
+        root_layout.setContentsMargins(10, 10, 10, 10) 
+        
+        # 3. 创建实际的背景容器 (QFrame)，所有内容都放在这里
+        self.main_container = QFrame()
+        self.main_container.setObjectName("mainContainer") # 用于QSS
+        
+        # 4. 添加阴影效果
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(25)
+        shadow.setColor(QColor(0, 0, 0, 100))
+        shadow.setOffset(0, 0)
+        self.main_container.setGraphicsEffect(shadow)
+        
+        root_layout.addWidget(self.main_container)
+
+        # 5. 容器内部的主布局：垂直布局，顶部是标题栏，底部是内容
+        container_layout = QVBoxLayout(self.main_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
 
         # --- 自定义标题栏 ---
         self.title_bar = CustomTitleBar(self)
@@ -236,9 +290,9 @@ class mainWindow(QMainWindow):
         content_layout.addWidget(self.siderBar)
         content_layout.addWidget(self.content, 1)
         
-        # --- 组装主布局 ---
-        main_layout.addWidget(self.title_bar)
-        main_layout.addLayout(content_layout)
+        # --- 组装容器布局 ---
+        container_layout.addWidget(self.title_bar)
+        container_layout.addLayout(content_layout)
 
 
     def content_init(self) -> QStackedWidget:
@@ -251,5 +305,19 @@ class mainWindow(QMainWindow):
     def onclick(self, item: QListWidgetItem) -> None:
         data =  item.data(Qt.UserRole)
         self.content.setCurrentIndex(data)
+
+    def showEvent(self, event):
+        """重写showEvent，在窗口显示时添加淡入动画"""
+        target_opacity = self.main_config.get("window_opacity", 1.0)
+        
+        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_animation.setDuration(300)
+        self.fade_animation.setStartValue(0.0)
+        self.fade_animation.setEndValue(target_opacity)
+        self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        
+        self.fade_animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+        
+        super().showEvent(event)
 
 

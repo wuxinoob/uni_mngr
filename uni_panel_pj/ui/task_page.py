@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon, QStyle, QPushButton, QListWidget,
     QListWidgetItem, QVBoxLayout, QStackedWidget, QLineEdit,
     QLayout, QFormLayout, QPlainTextEdit, QComboBox, QDialog, QFileDialog, QDialogButtonBox,
-    QSpinBox, QCheckBox ,QMessageBox
+    QSpinBox, QCheckBox ,QMessageBox, QFrame
 )
 from PySide6.QtCore import Qt, QTimer, QPoint, QRectF, Signal, QThread, QPropertyAnimation, QEasingCurve, QBuffer, QRect, QProcess
 from PySide6.QtGui import (
@@ -239,22 +239,29 @@ class task_page(QWidget):
         # --- Header Layout ---
         header_layout = QHBoxLayout()
         task_name_label = QLabel(f"任务: {process_dict['name']}")
+        task_name_label.setStyleSheet("font-weight: bold; font-size: 16px;")
         status_label = QLabel(process_dict.get("status", "stopped"))
         self.status_labels[process_dict["name"]] = status_label
         header_layout.addWidget(task_name_label)
         header_layout.addWidget(status_label)
-        header_layout.addStretch() # Add spacer to push the next widgets to the right
+        header_layout.addStretch()
         
         task_complex_page = QPushButton("详细任务配置")
+        task_complex_page.setObjectName("taskConfigButton")
         task_complex_page.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
         task_complex_page.clicked.connect(lambda: self.change_config_task_page(process_dict))
         header_layout.addWidget(task_complex_page)
         Vlayout.addLayout(header_layout)
 
+        # --- Divider ---
+        line1 = QFrame()
+        line1.setFrameShape(QFrame.Shape.HLine)
+        line1.setFrameShadow(QFrame.Shadow.Sunken)
+        Vlayout.addWidget(line1)
+
         output = QPlainTextEdit()
         output.setReadOnly(True)
         self.output_widgets[process_dict["name"]] = output
-
         Vlayout.addWidget(output)
 
         input_layout = QHBoxLayout()
@@ -262,8 +269,6 @@ class task_page(QWidget):
         input_field.setPlaceholderText("在这里输入并回车发送消息...")
         self.input_widgets[process_dict["name"]] = input_field
         send_button = QPushButton("发送")
-        send_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOkButton))
-        
         input_layout.addWidget(input_field)
         input_layout.addWidget(send_button)
         Vlayout.addLayout(input_layout)
@@ -272,23 +277,37 @@ class task_page(QWidget):
         send_button.clicked.connect(lambda: self.send_input_to_task(process_dict["name"]))
         input_field.returnPressed.connect(lambda: self.send_input_to_task(process_dict["name"]))
 
+        # --- Divider ---
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.Shape.HLine)
+        line2.setFrameShadow(QFrame.Shadow.Sunken)
+        Vlayout.addWidget(line2)
+
         run_Hlayout = QHBoxLayout()
         runButton = QPushButton("运行")
+        runButton.setObjectName("runButton")
         runButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         runButton.clicked.connect(lambda: self.ProcessManager.start_process(process_dict["name"]))
+        
         stopButton = QPushButton("停止")
+        stopButton.setObjectName("stopButton")
         stopButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
         stopButton.clicked.connect(lambda: self.ProcessManager.stop_process(process_dict["name"]))
+        
         restartButton = QPushButton("重启")
+        restartButton.setObjectName("restartButton")
         restartButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
         restartButton.clicked.connect(lambda: self.ProcessManager.restart_process(process_dict["name"]))
+
         deleteButton = QPushButton("清除任务")
+        deleteButton.setObjectName("deleteButton")
         deleteButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
         deleteButton.clicked.connect(lambda: self.handle_delete_task(process_dict["name"]))
 
         run_Hlayout.addWidget(runButton)
         run_Hlayout.addWidget(stopButton)
         run_Hlayout.addWidget(restartButton)
+        run_Hlayout.addStretch()
         run_Hlayout.addWidget(deleteButton)
         Vlayout.addLayout(run_Hlayout)
 
@@ -305,11 +324,11 @@ class task_page(QWidget):
             label.setText(status)
             # Optional: Style the label based on status
             if status == "running":
-                label.setStyleSheet("color: green; font-weight: bold;")
+                label.setStyleSheet("color: #2ecc71; font-weight: bold;")
             elif status == "stopped":
-                label.setStyleSheet("color: red;")
+                label.setStyleSheet("color: #e74c3c; font-weight: bold;")
             elif status == "starting":
-                label.setStyleSheet("color: orange;")
+                label.setStyleSheet("color: #f39c12; font-weight: bold;")
             else:
                 label.setStyleSheet("") # Reset to default
 
