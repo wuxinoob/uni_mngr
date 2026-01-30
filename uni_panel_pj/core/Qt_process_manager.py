@@ -246,6 +246,17 @@ class ProcessManager(QObject):
     def route_message(self, source_name, message):
         if (source_name in self.task_status) and self.task_status[source_name]["show_type"]=="secondlevel_page":
             self.task_page.add_text(source_name, message)
+
+    def get_running_tasks(self) -> list[str]:
+        """返回所有正在运行的任务名称列表"""
+        return [name for name, task in self.task_status.items() if task.get("status") == "running"]
+
+    def stop_all_tasks(self):
+        """停止所有正在运行的任务"""
+        running_tasks = self.get_running_tasks()
+        self.sig_log.emit(f"正在停止所有任务: {running_tasks}")
+        for name in running_tasks:
+            self.stop_process(name)
             
     def print_log(self, message):
         print(message)

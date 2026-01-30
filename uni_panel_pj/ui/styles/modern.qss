@@ -171,6 +171,12 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
 
 /* --- NEW STYLES --- */
 
+/* Add border to QListWidget to match theme */
+QListWidget {
+    border-radius: 8px;
+    border: 1px solid #2c3e50;
+}
+
 /* StyledListWidget specific styles */
 StyledListWidget {
     border-radius: 10px;
@@ -218,5 +224,53 @@ QSpinBox::down-button {
 }
 
 QSpinBox::down-button:hover {
+
     background: #5b7a97;
+
+}
+
+
+
+/* --- Custom Title Bar Styles --- */
+
+#customTitleBar {
+
+    background-color: #233140; /* Darker Slate Blue to match QMainWindow */
+
+}
+
+
+
+#customTitleBar QPushButton {
+
+    padding: 0;
+
+    margin: 0;
+
+    border: none;
+
+    border-radius: 0px;
+
+    background-color: transparent;
+
+    font-size: 16px;
+
+    font-weight: bold;
+
+}
+
+
+
+#minimizeButton:hover, #maximizeButton:hover {
+
+    background-color: #4a637a;
+
+}
+
+
+
+#closeButton:hover {
+
+    background-color: #e74c3c; /* Red color for close button hover */
+
 }

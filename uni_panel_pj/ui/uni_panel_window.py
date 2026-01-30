@@ -18,6 +18,8 @@ from uni_panel_pj.core.Qt_process_manager import ProcessManager
 from uni_panel_pj.ui.task_page import task_page
 from uni_panel_pj.ui.settings_page import SettingsPage
 from uni_panel_pj.ui.animated_stacked_widget import AnimatedStackedWidget
+from uni_panel_pj.ui.collapsible_list_widget import CollapsibleListWidget
+from uni_panel_pj.ui.custom_title_bar import CustomTitleBar
 import json
 import qdarktheme
 
@@ -27,6 +29,14 @@ class mainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("通用面板")
         self.resize(800, 600)
+        
+        # 设置无边框窗口
+        self.setWindowFlag(Qt.FramelessWindowHint)
+
+        # 设置图标（使用内置标准图标作为占位符）
+        self.app_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        self.setWindowIcon(self.app_icon)
+
         self.config_path = config_path
         self.main_config = {}
         self.sidebar_list:list[dict] = []
@@ -41,12 +51,75 @@ class mainWindow(QMainWindow):
         self.backend_init() # 必须先初始化后端，让PM知道task_page的存在
         self.load_cfg() # 再加载配置文件，此时add_task可以安全地调用UI
         self.initUI()
+        self._init_tray_icon() # 初始化系统托盘图标
         
         # 将加载好的配置应用到UI
         self.settings_page.load_settings(self.main_config)
         
         # 连接信号
         self.settings_page.setting_changed.connect(self._on_setting_changed)
+
+    def _init_tray_icon(self):
+        """初始化系统托盘图标和菜单"""
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(self.app_icon)
+        self.tray_icon.setToolTip("UniPanel")
+
+        tray_menu = QMenu()
+        show_action = QAction("显示", self)
+        exit_action = QAction("退出", self)
+
+        show_action.triggered.connect(self.show)
+        exit_action.triggered.connect(self.close)
+
+        tray_menu.addAction(show_action)
+        tray_menu.addAction(exit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._tray_icon_activated)
+        self.tray_icon.show()
+
+    @Slot(QSystemTrayIcon.ActivationReason)
+    def _tray_icon_activated(self, reason):
+        """处理托盘图标点击事件"""
+        # 左键单击显示窗口
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.showNormal() # 显示并恢复窗口状态
+            self.activateWindow() # 激活窗口
+
+    def closeEvent(self, event):
+        """重写关闭事件，实现最小化到托盘或退出的逻辑"""
+        event.ignore() # 默认忽略关闭事件，由我们完全接管
+
+        # 1. 检查是否有正在运行的子进程
+        running_tasks = self.ProcessManager.get_running_tasks()
+        if running_tasks:
+            task_list_str = "\n - ".join(running_tasks)
+            ret = QMessageBox.question(self, "确认退出?", 
+                                         f"有以下任务正在运行:\n - {task_list_str}\n\n是否要终止这些任务并继续?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if ret == QMessageBox.No:
+                return # 用户取消，不做任何事
+
+        # 2. 询问用户是最小化还是退出
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("操作确认")
+        msg_box.setText("您想如何操作？")
+        msg_box.setStandardButtons(QMessageBox.Cancel)
+        tray_button = msg_box.addButton("最小化到托盘", QMessageBox.ActionRole)
+        exit_button = msg_box.addButton("直接退出", QMessageBox.ActionRole)
+        
+        msg_box.exec()
+
+        # 3. 根据用户选择执行操作
+        if msg_box.clickedButton() == tray_button:
+            self.hide() # 隐藏窗口
+        elif msg_box.clickedButton() == exit_button:
+            self.tray_icon.hide()
+            self.ProcessManager.stop_all_tasks()
+            QApplication.quit() # 彻底退出应用
+        else:
+            return # 用户点击了Cancel
 
 
     def load_cfg(self):
@@ -123,56 +196,60 @@ class mainWindow(QMainWindow):
     def initUI(self):
         central_wid = QWidget()
         self.setCentralWidget(central_wid)
-        self.main_wid = QHBoxLayout(central_wid)
-        self.main_wid.setContentsMargins(0, 0, 0, 0)
         
-        self.siderBar = self.sideBar_init()
+        # 主布局：垂直布局，顶部是标题栏，底部是内容
+        main_layout = QVBoxLayout(central_wid)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # --- 自定义标题栏 ---
+        self.title_bar = CustomTitleBar(self)
+        self.title_bar.set_icon(self.app_icon)
+        self.title_bar.set_title(self.windowTitle())
+        
+        # --- 内容布局：水平布局 ---
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+
+        # --- 侧边栏 ---
+        self.siderBar = CollapsibleListWidget()
+        self.siderBar.setFont(QFont("Segoe UI", 12))
+        
+        icon_map = {
+            "任务管理": QStyle.StandardPixmap.SP_ComputerIcon,
+            "设置": QStyle.StandardPixmap.SP_FileDialogDetailedView
+        }
+        for i, item_data in enumerate(self.sidebar_list):
+            name = item_data["name"]
+            item = QListWidgetItem(name)
+            item.setData(Qt.UserRole, i)
+            icon = self.style().standardIcon(icon_map.get(name, QStyle.StandardPixmap.SP_FileIcon))
+            item.setIcon(icon)
+            self.siderBar.addItem(item)
+            
+        self.siderBar.itemClicked.connect(self.onclick)
+
+        # --- 内容区域 ---
         self.content = self.content_init()
 
-        # --- Sidebar Container ---
-        self.sidebar_container = QWidget()
-        sidebar_layout = QVBoxLayout(self.sidebar_container)
-        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        # --- 组装内容布局 ---
+        content_layout.addWidget(self.siderBar)
+        content_layout.addWidget(self.content, 1)
         
-        self.collapse_btn = QPushButton()
-        self.collapse_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowLeft))
-        self.collapse_btn.setCheckable(True)
-        self.collapse_btn.setChecked(True)
-        self.collapse_btn.clicked.connect(self.toggle_sidebar)
+        # --- 组装主布局 ---
+        main_layout.addWidget(self.title_bar)
+        main_layout.addLayout(content_layout)
 
-        sidebar_layout.addWidget(self.collapse_btn)
-        sidebar_layout.addWidget(self.siderBar)
-        
-        self.main_wid.addWidget(self.sidebar_container)
-        self.main_wid.addWidget(self.content, 1) # Give content stretch factor
 
-    def toggle_sidebar(self):
-        if self.collapse_btn.isChecked():
-            self.siderBar.show()
-            self.collapse_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowLeft))
-        else:
-            self.siderBar.hide()
-            self.collapse_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowRight))
-
-    def sideBar_init(self) ->QListWidget:
-        sideBar = QListWidget()
-        sideBar.setFont(QFont("Segoe UI", 12))
-        sideBar.setFixedWidth(150)
-        sideBar.itemClicked.connect(self.onclick)
-        for i, item_data in enumerate(self.sidebar_list):
-            task = QListWidgetItem(item_data["name"])
-            task.setData(Qt.UserRole, i)
-            sideBar.addItem(task)
-        return sideBar
-        
     def content_init(self) -> QStackedWidget:
         content = AnimatedStackedWidget()
         for dict_obj in self.sidebar_list:
             page = dict_obj["instance"]
             content.addWidget(page)
-
         return content
+
     def onclick(self, item: QListWidgetItem) -> None:
         data =  item.data(Qt.UserRole)
         self.content.setCurrentIndex(data)
-        # print(data) # Commented out for cleaner output
+
+
