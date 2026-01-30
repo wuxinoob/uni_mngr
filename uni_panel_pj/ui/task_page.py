@@ -16,6 +16,7 @@ from PySide6.QtGui import (
 from typing import Optional, Dict
 from uni_panel_pj.core.Qt_process_manager import ProcessManager
 from uni_panel_pj.ui.animated_stacked_widget import AnimatedStackedWidget
+from uni_panel_pj.ui.history_line_edit import HistoryLineEdit
 
 class complex_config_page(QDialog):
     def __init__(self, config:Optional[dict] = None,create_new:bool = False,modify_task:bool = False):
@@ -168,6 +169,7 @@ class task_page(QWidget):
         super().__init__()
         self.ProcessManager = ProcessManager
         self.output_widgets: Dict[str, QPlainTextEdit] = {}
+        self.input_widgets: Dict[str, HistoryLineEdit] = {}
         self.status_labels: Dict[str, QLabel] = {}
         self.ui_init()
         self.add_new_task_page()
@@ -256,8 +258,9 @@ class task_page(QWidget):
         Vlayout.addWidget(output)
 
         input_layout = QHBoxLayout()
-        input_field = QLineEdit()
+        input_field = HistoryLineEdit()
         input_field.setPlaceholderText("在这里输入并回车发送消息...")
+        self.input_widgets[process_dict["name"]] = input_field
         send_button = QPushButton("发送")
         send_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOkButton))
         
@@ -266,8 +269,8 @@ class task_page(QWidget):
         Vlayout.addLayout(input_layout)
         
         # Connect signals
-        send_button.clicked.connect(lambda: self.send_input_to_task(process_dict["name"], input_field))
-        input_field.returnPressed.connect(lambda: self.send_input_to_task(process_dict["name"], input_field))
+        send_button.clicked.connect(lambda: self.send_input_to_task(process_dict["name"]))
+        input_field.returnPressed.connect(lambda: self.send_input_to_task(process_dict["name"]))
 
         run_Hlayout = QHBoxLayout()
         runButton = QPushButton("运行")
@@ -310,10 +313,15 @@ class task_page(QWidget):
             else:
                 label.setStyleSheet("") # Reset to default
 
-    def send_input_to_task(self, task_name: str, input_widget: QLineEdit):
+    def send_input_to_task(self, task_name: str):
+        input_widget = self.input_widgets.get(task_name)
+        if not input_widget:
+            return
+            
         text = input_widget.text()
         if text:
             self.ProcessManager.write_to_process(task_name, text)
+            input_widget.add_to_history(text)
             input_widget.clear()
 
     def handle_delete_task(self, task_name: str):
@@ -339,6 +347,8 @@ class task_page(QWidget):
             del self.output_widgets[name_to_delete]
         if name_to_delete in self.status_labels:
             del self.status_labels[name_to_delete]
+        if name_to_delete in self.input_widgets:
+            del self.input_widgets[name_to_delete]
             
         # Find and remove from QListWidget and QStackedWidget
         for i in range(self.task_list.count()):

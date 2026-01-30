@@ -25,30 +25,44 @@ class mainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("通用面板")
         self.resize(800, 600)
+        self.config_path = config_path
         self.sidebar_list:list[dict] = []
+
         self.ProcessManager = ProcessManager()
         self.task_page = task_page(self.ProcessManager)
-        self.sidebar_list.append({"name":"任务管理", "instance": self.task_page})        
+        self.sidebar_list.append({"name":"任务管理", "instance": self.task_page})     
+
         self.backend_init()
         self.initUI()
-    def load_cfg(self,config_path:str):
-        if not os.path.exists(os.path.join(config_path, "UI_CONFIG.json")):
-            with open(os.path.join(config_path, "UI_CONFIG.json"), "r+") as f:
-                pass
-        else:
-            pass #主窗口页面的配置文件
-        if not os.path.exists(os.path.join(config_path, "process_manager_config.json")):
-            with open(os.path.join(config_path, "process_manager_config.json"), "r+") as f:
-                pass
-        else:
-            with open(os.path.join(config_path, "process_manager_config.json"), "r+") as f:
-                self.ProcessManager.load_config(json.load(f))
+        self.load_cfg() # 加载配置文件
 
-        pass
+    def load_cfg(self):
+        # 主窗口相关的配置（如果需要）
+        ui_config_path = os.path.join(self.config_path, "UI_CONFIG.json")
+        if os.path.exists(ui_config_path):
+            pass # 以后可以从这里加载UI状态
+
+        # 加载进程管理器相关的配置
+        process_config_path = os.path.join(self.config_path, "process_manager_config.json")
+        if os.path.exists(process_config_path):
+            try:
+                with open(process_config_path, "r", encoding='utf-8') as f:
+                    content = f.read()
+                    if not content:
+                        print("配置文件为空，跳过加载。")
+                        return
+                    config_data = json.loads(content)
+                self.ProcessManager.load_config(config_data)
+            except json.JSONDecodeError:
+                print(f"错误: 配置文件 {process_config_path} 格式错误，无法解析。")
+            except Exception as e:
+                print(f"加载配置文件时发生未知错误: {e}")
 
 
     def backend_init(self):
-        """自启动程序"""
+        """后端初始化 & 传递必要的对象"""
+        process_config_file_path = os.path.join(self.config_path, "process_manager_config.json")
+        self.ProcessManager.set_config_path(process_config_file_path)
         self.ProcessManager.add_obj(self,self.task_page)
 
     def initUI(self):
