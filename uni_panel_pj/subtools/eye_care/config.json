@@ -1,0 +1,15 @@
+{
+    "work_minutes": 1,
+    "rest_minutes": 1,
+    "window_width": 160,
+    "window_height": 40,
+    "theme": "Aqua",
+    "font_family": "Verdana",
+    "image_path": null,
+    "rest_image_opacity": 0.79,
+    "fade_duration": 1000,
+    "rest_image_gamma": 1.5,
+    "remember_position": true,
+    "window_x": 1310,
+    "window_y": 57
+}

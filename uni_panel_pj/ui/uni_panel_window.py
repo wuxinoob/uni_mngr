@@ -36,6 +36,7 @@ from uni_panel_pj.ui.settings_page import SettingsPage
 from uni_panel_pj.ui.animated_stacked_widget import AnimatedStackedWidget
 from uni_panel_pj.ui.collapsible_list_widget import CollapsibleListWidget
 from uni_panel_pj.ui.custom_title_bar import CustomTitleBar
+from uni_panel_pj.ui.eye_care_page import EyeCarePage
 import json
 import qdarktheme
 
@@ -59,10 +60,16 @@ class mainWindow(QMainWindow):
         self.sidebar_list:list[dict] = []
 
         self.ProcessManager = ProcessManager()
+        # 尽早设置路径，防止组件初始化时添加任务报错
+        process_config_file_path = os.path.join(self.config_path, "process_manager_config.json")
+        self.ProcessManager.set_config_path(process_config_file_path)
+
         self.task_page = task_page(self.ProcessManager)
+        self.eye_care_page = EyeCarePage(self.ProcessManager)
         self.settings_page = SettingsPage()
 
         self.sidebar_list.append({"name":"任务管理", "instance": self.task_page})
+        self.sidebar_list.append({"name":"护眼助手", "instance": self.eye_care_page})
         self.sidebar_list.append({"name":"设置", "instance": self.settings_page})
 
         self.backend_init() # 必须先初始化后端，让PM知道task_page的存在
@@ -185,6 +192,9 @@ class mainWindow(QMainWindow):
                 print(f"错误: 配置文件 {process_config_path} 格式错误，无法解析。")
             except Exception as e:
                 print(f"加载进程配置文件时发生未知错误: {e}")
+        else:
+            # 如果没有配置文件，允许保存以创建新文件
+            self.ProcessManager.enable_save()
 
     def _save_main_config(self):
         """保存主UI配置文件"""
@@ -223,8 +233,6 @@ class mainWindow(QMainWindow):
 
     def backend_init(self):
         """后端初始化 & 传递必要的对象"""
-        process_config_file_path = os.path.join(self.config_path, "process_manager_config.json")
-        self.ProcessManager.set_config_path(process_config_file_path)
         self.ProcessManager.set_main_panel_config(self.main_config) # 传递主配置
         self.ProcessManager.add_obj(self,self.task_page)
 
@@ -271,6 +279,7 @@ class mainWindow(QMainWindow):
         
         icon_map = {
             "任务管理": QStyle.StandardPixmap.SP_ComputerIcon,
+            "护眼助手": QStyle.StandardPixmap.SP_DesktopIcon,
             "设置": QStyle.StandardPixmap.SP_FileDialogDetailedView
         }
         for i, item_data in enumerate(self.sidebar_list):

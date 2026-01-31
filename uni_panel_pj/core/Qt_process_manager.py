@@ -23,6 +23,7 @@ class ProcessManager(QObject):
         self.task_status = {} # 存储 { "name": {status: "running" | "stopped", ...} }
         self.config_path = ""
         self.main_panel_config = {}
+        self._save_enabled = False # 默认禁止保存，防止初始化覆盖
         self.sig_log.connect(self.print_log)
 
         # 设置定时任务检查器
@@ -41,8 +42,15 @@ class ProcessManager(QObject):
         """接收主程序的配置字典"""
         self.main_panel_config = config
 
+    def enable_save(self):
+        """允许保存配置"""
+        self._save_enabled = True
+
     def _save_config(self):
         """保存配置到JSON文件，会移除QProcess等无法序列化的实例"""
+        if not self._save_enabled:
+            return
+
         if not self.config_path:
             self.sig_log.emit("错误: 配置文件路径未设置，无法保存。")
             return
@@ -216,6 +224,7 @@ class ProcessManager(QObject):
                 self.start_process(name)
                 
         self._update_app_autostart_status()
+        self._save_enabled = True # 加载完成，允许保存
         self.sig_log.emit("任务配置加载完毕。")
 
     def write_to_process(self, target_name, data_str):
@@ -246,6 +255,9 @@ class ProcessManager(QObject):
     def route_message(self, source_name, message):
         if (source_name in self.task_status) and self.task_status[source_name]["show_type"]=="secondlevel_page":
             self.task_page.add_text(source_name, message)
+        else:
+            # 对于隐藏任务，输出到控制台以便调试
+            print(f"[{source_name} OUTPUT]: {message}")
 
     def get_running_tasks(self) -> list[str]:
         """返回所有正在运行的任务名称列表"""
