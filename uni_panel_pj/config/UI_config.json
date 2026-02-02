@@ -1,7 +1,7 @@
 {
-    "theme": "dark",
+    "theme": "light",
     "master_autostart": true,
-    "window_opacity": 0.85,
+    "window_opacity": 0.76,
     "app_font": "宋体",
-    "app_font_size": 9
+    "app_font_size": 11
 }

@@ -15,7 +15,7 @@
         "task_cmd": "cmd",
         "task_path": "",
         "cmd_args": "",
-        "start_up": false,
+        "start_up": true,
         "auto_restart": false,
         "max_exec_time": 0,
         "start_time_hour": 0,
