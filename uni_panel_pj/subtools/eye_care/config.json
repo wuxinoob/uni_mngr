@@ -5,11 +5,11 @@
     "window_height": 40,
     "theme": "Dark",
     "font_family": "Segoe UI",
-    "image_path": null,
-    "rest_image_opacity": 0.79,
+    "image_path": "D:/documentation/\u56fe\u7247/pixiv/58145566_p0.png",
+    "rest_image_opacity": 0.86,
     "fade_duration": 1000,
     "rest_image_gamma": 1.5,
     "remember_position": true,
-    "window_x": 1260,
-    "window_y": 81
+    "window_x": 1258,
+    "window_y": 69
 }

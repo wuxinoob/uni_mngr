@@ -4,6 +4,7 @@ import argparse
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
+import PySide6.QtSvg # Ensure SVG support is loaded
 from uni_panel_pj.ui.uni_panel_window import mainWindow
 
 if __name__ == "__main__":

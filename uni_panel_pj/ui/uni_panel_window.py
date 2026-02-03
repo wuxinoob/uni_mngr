@@ -3,6 +3,7 @@ import subprocess
 import sys
 import os
 import json
+import base64
 from typing import Optional
 
 from PySide6.QtWidgets import (
@@ -16,11 +17,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import (
     Qt, QTimer, QPoint, QRectF, Signal, QThread, 
     QPropertyAnimation, QEasingCurve, QBuffer, QRect, 
-    QProcess, Slot
+    QProcess, Slot, QIODevice
 )
 from PySide6.QtGui import (
     QPainter, QColor, QAction, QPixmap, QGuiApplication,
-    QIcon, QBrush, QPen, QFont, QImage, QRegion, QPalette, QMouseEvent
+    QIcon, QBrush, QPen, QFont, QImage, QRegion, QPalette, QMouseEvent,
+    QPolygonF
 )
 
 from uni_panel_pj.core.Qt_process_manager import ProcessManager
@@ -253,8 +255,77 @@ class mainWindow(QMainWindow):
                 
             # 替换颜色变量
             colors = THEME_COLORS.get(theme_name, THEME_COLORS["dark"])
-            for key, value in colors.items():
-                stylesheet = stylesheet.replace(key, value)
+            replacements = colors.copy()
+            
+            # --- Generate Arrow PNGs (Save to Disk) ---
+            text_color_str = replacements.get("@text_main", "#ffffff")
+            text_color = QColor(text_color_str)
+            
+            # Ensure generated directory exists
+            generated_dir = os.path.join(current_dir, "styles", "generated")
+            if not os.path.exists(generated_dir):
+                os.makedirs(generated_dir)
+
+            def generate_arrow_file(is_up: bool) -> str:
+                size = 16
+                image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
+                image.fill(QColor(0, 0, 0, 0))
+                
+                painter = QPainter(image)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setBrush(QBrush(text_color))
+                painter.setPen(Qt.PenStyle.NoPen)
+                
+                cx, cy = size / 2, size / 2
+                offset = 4
+                h_offset = 3
+                
+                if is_up:
+                    points = [
+                        QPoint(cx - offset, cy + h_offset), 
+                        QPoint(cx, cy - h_offset),     
+                        QPoint(cx + offset, cy + h_offset)
+                    ]
+                else:
+                    points = [
+                        QPoint(cx - offset, cy - h_offset), 
+                        QPoint(cx, cy + h_offset),     
+                        QPoint(cx + offset, cy - h_offset)
+                    ]
+                    
+                painter.drawPolygon(points)
+                painter.end()
+                
+                filename = "arrow_up.png" if is_up else "arrow_down.png"
+                file_path = os.path.join(generated_dir, filename)
+                image.save(file_path, "PNG")
+                
+                # Qt stylesheets require forward slashes
+                return f"url('{file_path.replace(os.sep, '/')}')"
+
+            replacements["@arrow_up_url"] = generate_arrow_file(True)
+            replacements["@arrow_down_url"] = generate_arrow_file(False)
+            # ---------------------------------------------
+            
+            # 生成用于SVG的RGB格式颜色 (避免URL中的#号问题)
+            for k, v in colors.items():
+                if isinstance(v, str) and v.startswith("#"):
+                    try:
+                        # 解析 hex 颜色
+                        hex_val = v.lstrip('#')
+                        if len(hex_val) == 3:
+                            hex_val = "".join([x*2 for x in hex_val])
+                        r = int(hex_val[0:2], 16)
+                        g = int(hex_val[2:4], 16)
+                        b = int(hex_val[4:6], 16)
+                        replacements[k + "_rgb"] = f"rgb({r}, {g}, {b})"
+                    except Exception:
+                        pass
+
+            # 按长度降序排序键，防止部分匹配替换 (如 @text_main 替换了 @text_main_rgb 的前缀)
+            sorted_keys = sorted(replacements.keys(), key=len, reverse=True)
+            for key in sorted_keys:
+                stylesheet = stylesheet.replace(key, replacements[key])
                 
             QApplication.instance().setStyleSheet(stylesheet)
         except Exception as e:

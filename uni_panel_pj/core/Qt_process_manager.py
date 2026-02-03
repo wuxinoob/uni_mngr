@@ -55,10 +55,16 @@ class ProcessManager(QObject):
             self.sig_log.emit("错误: 配置文件路径未设置，无法保存。")
             return
 
-        tasks_to_save = copy.deepcopy(self.task_status)
-        for name, task_data in tasks_to_save.items():
-            if "instance" in task_data:
-                del task_data["instance"]
+        # 避免 deepcopy 导致的 QProcess pickle 错误
+        # 手动构建要保存的字典，排除 runtime 对象
+        tasks_to_save = {}
+        for name, task_data in self.task_status.items():
+            # 浅拷贝任务数据 (内部只有 str, int, bool 等基本类型，除非有嵌套对象)
+            # 注意：task_data 里的 "instance" 是 QProcess，必须排除
+            clean_data = task_data.copy()
+            if "instance" in clean_data:
+                del clean_data["instance"]
+            tasks_to_save[name] = clean_data
 
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
@@ -212,15 +218,25 @@ class ProcessManager(QObject):
             self.sig_log.emit("警告: 配置文件格式不正确，应为字典。")
             return
         
-        is_autostart_launch = "--autostart" in sys.argv
+        # is_autostart_launch = "--autostart" in sys.argv 
+        # 修改逻辑：只要配置了 start_up，无论是否是通过 --autostart 启动，都运行任务
+        # 这样符合 "随面板自动启动" (Start with Panel) 的直观定义
 
         for name, task_dict in config_data.items():
             if "name" not in task_dict:
                 task_dict["name"] = name
-            self.add_task(task_dict)
             
-            if is_autostart_launch and task_dict.get("start_up"):
-                self.sig_log.emit(f"自启动模式: 启动任务 {name}。")
+            # 关键修改：如果任务已存在（例如由UI初始化默认添加），则更新配置而不是跳过
+            if name in self.task_status:
+                self.task_status[name].update(task_dict)
+            else:
+                self.add_task(task_dict)
+            
+            # 检查是否需要启动
+            # 注意：这里使用更新后的 self.task_status[name] 来判断，确保使用最新配置
+            current_task = self.task_status[name]
+            if current_task.get("start_up"):
+                self.sig_log.emit(f"自启动配置生效: 正在启动任务 {name}。")
                 self.start_process(name)
                 
         self._update_app_autostart_status()

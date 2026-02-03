@@ -8,11 +8,16 @@
 - **`main.py`**: 程序入口。
   - 处理命令行参数 (`--autostart`)。
   - 初始化 Qt 应用，设置 HighDPI 策略。
+  - 显式导入 `PySide6.QtSvg` 以确保 SVG 格式支持。
   - 应用默认主题 (`qdarktheme`)。
   - 启动主窗口。
 
 - **`uni_panel_pj/ui/uni_panel_window.py` (`mainWindow`)**:
   - **核心容器**: 设置了 `Qt.FramelessWindowHint` (无边框) 和 `Qt.WA_TranslucentBackground` (背景透明)。
+  - **动态资源生成**: 
+    - 包含动态生成 UI 图标的逻辑（如 `QSpinBox` 和 `QComboBox` 的上下箭头）。
+    - 使用 `QPainter` 根据当前主题色生成 PNG 图像，并将其保存到 `uni_panel_pj/ui/styles/generated/` 目录。
+    - 这种方式解决了 Base64 在某些环境下解析异常以及 SVG 渲染不稳定的问题。
   - **布局逻辑**: 使用 `mainContainer` (QFrame) 包裹所有内容以实现 20px 圆角和四周阴影效果 (`QGraphicsDropShadowEffect`)。
   - **生命周期**: 
     - `__init__`: 初始化 `ProcessManager`，设置配置路径，实例化各个页面（TaskPage, EyeCarePage, SettingsPage）。
@@ -71,6 +76,8 @@
 
 - **`uni_panel_pj/ui/styles/modern.qss`**:
   - 全局样式表。
+  - **样式适配**: 使用 Python 占位符替换机制实现动态配色。
+  - **控件美化**: 针对 `QSpinBox` 和 `QComboBox` 定义了自定义的按钮和箭头样式，通过引用动态生成的本地图像来保证渲染一致性。
   - 移除了硬编码的字体设置，以支持动态字体调整。
   - 定义了 20px 圆角、边框、按钮状态（运行/停止/删除）的样式。
 
@@ -86,7 +93,7 @@
    - `load_cfg`: 加载主配置（合并默认值），加载 PM 任务配置。
      - 加载完成后，启用 PM 保存 (`_save_enabled=True`)。
      - 如果 PM 配置文件不存在，显式调用 `enable_save()`。
-   - `initUI`: 构建界面。
+   - `initUI`: 构建界面并触发样式表加载（含资源生成）。
 3. 窗口显示时触发 `showEvent`，执行淡入动画。
 
 ### 3.2 EyeCare 集成流程
@@ -108,6 +115,7 @@
 
 ## 4. UI/UX 特性
 - **圆角窗口**: 主窗口 20px 圆角，伴随柔和的阴影。
+- **动态主题资源**: 控件图标（如 SpinBox 箭头）会根据主题颜色动态生成，确保在深浅色模式下均有良好的可视性。
 - **无边框**: 实现了自定义的边缘拖拽缩放和标题栏拖动。
 - **动画**: 侧边栏折叠动画、页面切换动画、窗口启动淡入动画。
 - **风格**: 深色现代主题，扁平化按钮，Unicode 图标。
@@ -117,3 +125,4 @@
 - `ProcessManager` 解析参数时使用简单的空格分割，不支持带空格的路径。建议改进为 `shlex` 解析。
 - `EyeCare` 子进程依赖 `Pillow` 库。
 - 确保所有新添加的 UI 控件不要在 QSS 中硬编码字体大小。
+- 样式表变量替换时采用了按键长度降序排序的策略，以防止变量名包含关系（如 `@text` 与 `@text_rgb`）导致的错误替换。
