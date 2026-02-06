@@ -3,7 +3,6 @@ import subprocess
 import sys
 import os
 import json
-import base64
 from typing import Optional
 
 from PySide6.QtWidgets import (
@@ -16,8 +15,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, QTimer, QPoint, QRectF, Signal, QThread, 
-    QPropertyAnimation, QEasingCurve, QBuffer, QRect, 
-    QProcess, Slot, QIODevice
+    QPropertyAnimation, QEasingCurve, QRect, 
+    QProcess, Slot
 )
 from PySide6.QtGui import (
     QPainter, QColor, QAction, QPixmap, QGuiApplication,
@@ -91,15 +90,18 @@ class mainWindow(QMainWindow):
         self.ProcessManager.set_config_path(process_config_file_path)
 
         self.task_page = task_page(self.ProcessManager)
-        self.eye_care_page = EyeCarePage(self.ProcessManager)
         self.settings_page = SettingsPage()
+
+        self.backend_init()
+        self.load_cfg()
+
+        # EyeCarePage depends on ProcessManager status, so init it AFTER loading config
+        self.eye_care_page = EyeCarePage(self.ProcessManager)
 
         self.sidebar_list.append({"name": "任务管理", "instance": self.task_page})
         self.sidebar_list.append({"name": "护眼助手", "instance": self.eye_care_page})
         self.sidebar_list.append({"name": "设置", "instance": self.settings_page})
 
-        self.backend_init()
-        self.load_cfg()
         self.initUI()
         self._init_tray_icon()
         

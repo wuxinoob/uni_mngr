@@ -8,7 +8,6 @@
 - **`main.py`**: 程序入口。
   - 处理命令行参数 (`--autostart`)。
   - 初始化 Qt 应用，设置 HighDPI 策略。
-  - 显式导入 `PySide6.QtSvg` 以确保 SVG 格式支持。
   - 应用默认主题 (`qdarktheme`)。
   - 启动主窗口。
 
@@ -17,7 +16,7 @@
   - **动态资源生成**: 
     - 包含动态生成 UI 图标的逻辑（如 `QSpinBox` 和 `QComboBox` 的上下箭头）。
     - 使用 `QPainter` 根据当前主题色生成 PNG 图像，并将其保存到 `uni_panel_pj/ui/styles/generated/` 目录。
-    - 这种方式解决了 Base64 在某些环境下解析异常以及 SVG 渲染不稳定的问题。
+    - 这种方式通过使用本地文件路径引用资源，彻底解决了 Base64 解析异常及 SVG 渲染不稳定的问题，且无需额外引入 SVG 库。
   - **布局逻辑**: 使用 `mainContainer` (QFrame) 包裹所有内容以实现 20px 圆角和四周阴影效果 (`QGraphicsDropShadowEffect`)。
   - **生命周期**: 
     - `__init__`: 初始化 `ProcessManager`，设置配置路径，实例化各个页面（TaskPage, EyeCarePage, SettingsPage）。

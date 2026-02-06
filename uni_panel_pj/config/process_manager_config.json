@@ -2,13 +2,13 @@
     "EyeCare": {
         "name": "EyeCare",
         "task_cmd": "D:\\Code\\Y700\\Python\\uni_tool_mangr\\.venv\\Scripts\\python.exe",
-        "cmd_args": "d:\\Code\\Y700\\Python\\uni_tool_mangr\\uni_panel_pj\\subtools\\eye_care\\eye_care.py --config-file d:\\Code\\Y700\\Python\\uni_tool_mangr\\uni_panel_pj\\subtools\\eye_care\\config.json",
+        "cmd_args": "\"d:\\Code\\Y700\\Python\\uni_tool_mangr\\uni_panel_pj\\subtools\\eye_care\\eye_care.py\" --config-file \"d:\\Code\\Y700\\Python\\uni_tool_mangr\\uni_panel_pj\\subtools\\eye_care\\config.json\"",
         "task_path": "d:\\Code\\Y700\\Python\\uni_tool_mangr\\uni_panel_pj\\subtools\\eye_care",
-        "start_up": true,
+        "start_up": false,
         "auto_restart": false,
         "show_type": "hidden",
         "enable_timer": false,
-        "status": "stopped"
+        "status": "running"
     },
     "cmd": {
         "name": "cmd",

@@ -134,8 +134,15 @@ class EyeCarePage(QWidget):
         self.load_config_from_file()
         self.sync_config()
         
-        # 更新初始状态显示
-        self.update_ui_state(self.pm.task_status[self.task_name].get("status", "stopped"))
+        # 同步 UI 状态与 PM 状态
+        task_info = self.pm.task_status.get(self.task_name)
+        if task_info:
+            # 1. 同步运行状态
+            self.update_ui_state(task_info.get("status", "stopped"))
+            # 2. 同步自启复选框 (阻塞信号以防循环触发保存)
+            self.check_autostart.blockSignals(True)
+            self.check_autostart.setChecked(task_info.get("start_up", False))
+            self.check_autostart.blockSignals(False)
 
     def load_config_from_file(self):
         """从磁盘加载配置并更新 UI"""
@@ -250,10 +257,8 @@ class EyeCarePage(QWidget):
         # 更新任务启动参数
         task_info = self.pm.task_status.get(self.task_name)
         if task_info:
-            # 注意：ProcessManager 使用 split(" ") 解析参数，这不支持带空格的路径。
-            # 这是一个已知限制。如果路径包含空格，这里会出错。
-            # 我们暂时假设路径无空格，或者用户已安装了 requests/shlex 等库来改进 PM。
-            expected_args = f'{self.script_path} --config-file {config_path}'
+            # 使用引号包裹路径，防止空格导致参数解析错误
+            expected_args = f'"{self.script_path}" --config-file "{config_path}"'
             if task_info.get("cmd_args") != expected_args:
                 task_info["cmd_args"] = expected_args
                 self.pm._save_config()

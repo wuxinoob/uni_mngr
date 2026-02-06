@@ -1,10 +1,10 @@
 import sys
 import json
+import shlex
 from PySide6.QtCore import QObject, QProcess, Signal, Slot, QCoreApplication, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QTextEdit, QWidget
 import time
 from datetime import datetime
-import copy
 from uni_panel_pj.core.os_utils import manage_app_autostart
 
 # -----------------------------------------------------------------------------
@@ -139,7 +139,25 @@ class ProcessManager(QObject):
 
         process = QProcess()
         process.setProgram(self.task_status[name]["task_cmd"])
-        process.setArguments(self.task_status[name]["cmd_args"].split(" "))
+        
+        # 使用 shlex.split 处理带空格或引号的参数，提高兼容性
+        args_str = self.task_status[name]["cmd_args"]
+        try:
+            # Windows 下路径使用反斜杠，posix=True 会将其视为转义符，导致路径损坏
+            # 因此在 Windows 上必须使用 posix=False
+            is_posix = sys.platform != 'win32'
+            args_list = shlex.split(args_str, posix=is_posix)
+            # shlex 在 non-POSIX 模式下会保留引号 (e.g. '"path"')，这会导致 QProcess/Python 无法识别文件
+            # 需要手动去除外层引号
+            if not is_posix:
+                args_list = [arg.strip('"') for arg in args_list]
+        except ValueError:
+            # 如果解析失败(如未闭合引号)，回退到简单分割
+            self.sig_log.emit(f"警告: 解析参数出错，回退到简单分割: {args_str}")
+            args_list = args_str.split(" ")
+            
+        process.setArguments(args_list)
+        
         work_dir = self.task_status[name].get("task_path")
         if work_dir:
             process.setWorkingDirectory(work_dir)
@@ -152,7 +170,7 @@ class ProcessManager(QObject):
         
         self.task_status[name]["instance"] = process
         process.start()
-        self.sig_log.emit(f"启动进程: {name},{self.task_status[name]['task_cmd']} {self.task_status[name]['cmd_args']}")
+        self.sig_log.emit(f"启动进程: {name},{self.task_status[name]['task_cmd']} {args_list}")
 
     def _on_task_finished(self, name: str):
         self.sig_log.emit(f"任务 {name} 已结束。")
@@ -226,6 +244,12 @@ class ProcessManager(QObject):
             if "name" not in task_dict:
                 task_dict["name"] = name
             
+            # 强制重置状态为 stopped，因为进程不可能在应用重启后自动存活
+            # 这解决了从配置文件加载了 "status": "running" 导致无法启动的问题
+            task_dict["status"] = "stopped"
+            if "instance" in task_dict:
+                del task_dict["instance"]
+
             # 关键修改：如果任务已存在（例如由UI初始化默认添加），则更新配置而不是跳过
             if name in self.task_status:
                 self.task_status[name].update(task_dict)
